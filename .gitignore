@@ -1,0 +1,29 @@
+# Secrets - never commit
+
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local Team Lead activity database
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Logs
+*.log
+logs/
+
+# Test / tooling artefacts
+coverage/
+.vitest/
+.DS_Store
+Thumbs.db

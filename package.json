@@ -1,0 +1,46 @@
+{
+  "name": "k4k-team-lead-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "K4K Team Lead Assistant - a read-only Azure DevOps intelligence MCP server with confirmation-gated email for the K4K Platform team lead.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "bin": {
+    "k4k-team-lead-assistant": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "vitest run tests/security",
+    "test:skills": "vitest run tests/skills",
+    "inspector": "mcp-inspector --config mcp-inspector.config.json --server k4k-team-lead-assistant",
+    "inspector:build": "npm run build && mcp-inspector --config mcp-inspector.config.json --server k4k-team-lead-assistant-dist",
+    "verify:live": "tsx scripts/verify-live.ts",
+    "verify:readonly": "tsx scripts/verify-readonly.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "dotenv": "^17.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "^2.2.0",
+    "@types/node": "^24.13.3",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

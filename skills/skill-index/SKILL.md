@@ -79,6 +79,7 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 | --- | --- |
 | "Give me today's team status" | `team-morning-brief` |
 | "Morning briefing", "what should I look at today" | `team-morning-brief` |
+| "Prepare my daily standup", "daily meet starter" | `daily-standup-starter` |
 | "Who is overloaded?" | `workload-analysis` |
 | "How is work distributed?", "who has capacity?" | `workload-analysis` |
 | "What work is at risk?" | `deadline-risk-analysis` |
@@ -103,6 +104,7 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 
 | If both look plausible | Prefer | Because |
 | --- | --- | --- |
+| `daily-standup-starter` vs `team-morning-brief` | standup starter for brief daily meet format and assigning idle members, brief for personal TL triage | different audience and depth |
 | `team-morning-brief` vs `daily-team-report` | brief for "what needs me now", report for a document to keep or forward | the brief is triage; the report is an artefact |
 | `team-morning-brief` vs `sprint-health-analysis` | brief for today, sprint analysis for the iteration's trajectory | different time horizons |
 | `project-health-analysis` vs `sprint-health-analysis` | project for the whole backlog and delivery picture, sprint for the current iteration | different scopes |
@@ -150,6 +152,7 @@ For a catalogue request:
 AVAILABLE WORKFLOWS
 
 Briefing and reporting
+- daily-standup-starter — <description>
 - team-morning-brief — <description>
 - daily-team-report — <description>
 - weekly-team-review — <description>

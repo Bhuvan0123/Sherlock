@@ -21,6 +21,7 @@ import { connectTestClient, type ConnectedClient } from '../helpers/mcp-client.j
 import { setupHarness, type Harness } from '../helpers/harness.js';
 
 const EXPECTED_SKILLS = [
+    'daily-standup-starter',
     'daily-team-report',
     'deadline-risk-analysis',
     'project-health-analysis',

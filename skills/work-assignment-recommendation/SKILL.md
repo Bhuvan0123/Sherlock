@@ -2,7 +2,7 @@
 name: work-assignment-recommendation
 title: Work Assignment Recommendation
 description: Recommend who could take a named work item or the unassigned backlog, ranking Platform team members by measured capacity and demonstrated familiarity from the last 90 days, with confidence, reasons, current workload and risks - a recommendation only, never an assignment.
-version: 1.0.0
+version: 2.0.0
 category: recommendation
 mutates_azure_devops: false
 requires_confirmation: false
@@ -19,11 +19,14 @@ supporting_tools:
   - analysis_member_completed_work
   - ado_get_high_priority_items
   - ado_get_sprint_progress
+  - ado_query_work_items
+  - create_ado_query
 missing_capabilities:
   - "Azure DevOps holds no skills, capability or certification register, so familiarity can only be inferred from completed work of the same type, area path and tags in the last 90 days."
   - "There is no leave, holiday or availability calendar, so a recommendation cannot know whether the suggested member is present next week."
   - "Completion is attributed to the current AssignedTo, so a reassigned item counts towards its present owner and familiarity evidence can be slightly misplaced."
   - "KaarPulse cannot assign work; every assignment has to be made by a human in Azure DevOps."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - who should take this work item
   - who should pick up #1234
@@ -115,7 +118,8 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 3. **Call `analysis_team_workload` and `analysis_available_team_members`** once, and reuse them for every entry so the workload lines stay consistent across the list.
 4. **Call `ado_get_sprint_progress`** (default `"current"`) for the days remaining that make a due date meaningful, and `ado_get_high_priority_items` to confirm which items are priority 1–2.
 5. **Print each entry in the same shape**, ordered as the tool returned them, and add one closing paragraph on how the suggestions spread across the team so the Team Lead can see nobody was overloaded by the sweep.
-6. **Close with the verbatim line.**
+6. **If related unassigned items have count > 3**, call `create_ado_query` (`Platform - Unassigned Work`) and include the real URL. Do not create a query for a single item. Follow `_shared/query-workflow.md`.
+7. **Close with the verbatim line.** Do not assign the work item.
 
 ## Analysis Rules
 
@@ -147,20 +151,12 @@ Use the templates from `_shared/templates/` to construct the response.
    If Single item, list `#ID — "Title"`.
 3. **📌 At a Glance (Candidate Comparison)**:
    Provide a KPI table of candidates:
-   | Candidate | Current Load | Familiarity | Capacity | Recommendation |
+   | Candidate | Load | Relevant Work | Deadline Risk | Recommendation |
    |---|---|---|---|---|
-   | John | 🟡 Medium | High | Available | ⭐ Best |
-4. **💡 AI Recommendations**: 
-   The specific recommendation for the item (using the `recommendation.md` format), or a list of items for a backlog sweep.
-5. **🧠 AI Analysis (Spread)**: 
-   How the sweep distributes across the team (if doing a sweep) and the reasoning from `facts.candidates[]`.
-6. **🧭 TL Decision Support**: 
-   Present the options (e.g. Option A: Assign to John, Option B: Keep unassigned) based on the `decision-support.md` template.
-7. **🎯 Recommended Actions**:
-   Prompt the TL: "Decision required: Assign to <name>, choose another member, or keep unassigned?"
-
-Ensure you close with the verbatim line:
-`Recommendation only — no Azure DevOps changes were made.`
+4. **💡 Recommendation**: never assign the item. Confidence, reasons, cautions from the tool.
+5. **🔎 Azure DevOps Queries** only if a related set had count > 3 and `create_ado_query` returned a URL.
+6. **🧭 TL Decision Support**: Option A assign to top candidate / Option B keep unassigned / Option C choose runner-up.
+7. Close with: `Recommendation only — no Azure DevOps work items were modified.`
 
 ## Edge Cases
 
@@ -185,7 +181,7 @@ Ensure you close with the verbatim line:
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **This skill assigns nothing.** There is no assignment tool in the server. Every run ends with the verbatim line `Recommendation only — no Azure DevOps changes were made.`, and a request to perform the assignment is refused with the alternatives offered.
+- **This skill assigns nothing.** There is no assignment tool in the server. Every run ends with `Recommendation only — no Azure DevOps work items were modified.` Saved queries via `create_ado_query` are allowed when a related set has count > 3.
 - **Never claim an action that did not happen.** Do not say an item was assigned, reassigned or queued. `facts.actionRequired` from the tool already states that the change is manual; pass it through.
 - **No performance judgements.** Candidates are ranked on measured capacity and completed comparable work, never on ability, speed or attitude. Assume the output could be forwarded to every candidate named in it.
 - **Familiarity is inferred from a 90-day window** with completion attributed to the current owner. State the caveat where it matters rather than presenting the evidence as a skills profile.

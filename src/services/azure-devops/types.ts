@@ -212,6 +212,10 @@ export interface WorkItem {
     startDate: string | null;
     dueDate: string | null;
     targetDate: string | null;
+    plannedStart: string | null;
+    plannedEnd: string | null;
+    actualStart: string | null;
+    actualEnd: string | null;
     iterationPath: string | null;
     areaPath: string | null;
     priority: number | null;
@@ -228,4 +232,14 @@ export interface WorkItem {
     /** Browser URL for the work item, useful in reports and emails. */
     webUrl: string | null;
     relations: AdoWorkItemRelation[];
+    /** Plain text extracted from System.Description when that field exists. */
+    description: string | null;
+    acceptanceCriteria: string | null;
+    reproSteps: string | null;
+    valueArea: string | null;
+    risk: string | null;
+    businessValue: number | null;
+    activity: string | null;
+    /** Custom / process-specific fields (Custom.*, K4K.*, etc.) as string values. */
+    extraFields: Record<string, string | number | null>;
 }

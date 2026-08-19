@@ -2,7 +2,7 @@
 name: project-health-analysis
 title: Project Health Analysis
 description: Assess the overall health of the K4K project across delivery, backlog, resourcing, risk and sprint dimensions, using the server's measured health ratings plus backlog composition, hierarchy sampling, blocked work and dependency data from live Azure DevOps.
-version: 1.0.0
+version: 2.0.0
 category: analysis
 mutates_azure_devops: false
 requires_confirmation: false
@@ -22,11 +22,18 @@ supporting_tools:
   - ado_get_work_items_by_type
   - ado_get_work_item_hierarchy
   - ado_get_parent_work_item
+  - analysis_backlog_quality
+  - analysis_stale_work
+  - analysis_schedule_variance
+  - ado_get_field_mapping
+  - ado_query_work_items
+  - create_ado_query
 missing_capabilities:
   - "Azure DevOps exposes no budget, cost or resource-plan data, so financial health cannot be assessed."
   - "There is no project-level quality signal here - build results, test results, code coverage and pull requests are outside this server's read scope."
   - "Hierarchy quality has no aggregate query, so orphaned and parentless work can only be sampled item by item, never counted across the whole backlog."
   - "There is no recorded project baseline or original plan, so scope growth against a plan cannot be measured, only carry-over and mid-sprint additions."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - how healthy is the project
   - project health check
@@ -107,6 +114,7 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 10. **Map the server's dimension ratings** onto the five named dimensions using the mapping below, and derive the overall from `facts.health.overall`. State once that the mapping is this skill's presentation of the server's ratings.
 11. **Attach reasoning to every score** from the tool's `reasons[]`, adding the measured counts behind each. A dimension printed without reasons is a defect.
 12. **Assemble the report** in the order given in Output Format, then close with the read-only statement.
+13. **Create queries for significant problem groups** (count > 3) via `create_ado_query` — overdue, blocked, unassigned, missing planned dates, stale, hierarchy orphans — following `_shared/query-workflow.md`. Reuse data already fetched. The health table must explain **why** each dimension has that status (evidence), not only a colour.
 
 If `analysis_project_health` fails, build what you can from `ado_get_project_overview`, `analysis_team_workload`, `analysis_deadlines` and `analysis_blocked_items`, report the measured counts without ratings, and say the health ratings are unavailable rather than inventing them.
 
@@ -138,27 +146,23 @@ Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
 
 **Specific structure for Project Health Analysis:**
-1. **Header**: `# 📊 K4K Platform — Project Health`
-2. **Executive Summary**: State the `Overall Health` clearly (e.g., `# 🟠 AT RISK`). Add 1-2 sentences explaining why.
-3. **📌 At a Glance (Health Dimensions)**:
-   | Dimension | Status | Evidence/Why |
+1. **Header**: `# 🏥 Project Health` (or `# 📊 KaarPulse — Project Health`)
+2. **Executive Summary**: State overall status and **why** in 1-2 sentences. A score without explanation is a defect.
+3. **📌 Health dimensions**:
+   | Dimension | Status | Evidence |
    |---|---|---|
-   | Delivery Health | <indicator> | <short reason> |
-   | Backlog Health | <indicator> | <short reason> |
-   | Resource Health | <indicator> | <short reason> |
-   | Risk Health | <indicator> | <short reason> |
-   | Sprint Health | <indicator> | <short reason> |
-   *(Use indicator emojis for status, e.g., 🟢, 🟡, 🟠, 🔴).*
-4. **🚨 Top 5 Risks / Key Findings**: Extract the most critical issues from the reasoning, backlog anomalies, or dependency blocks.
-5. **🧠 AI Analysis (Reasoning)**: Detail the reasoning behind the worst dimensions.
-6. **💡 Recommendations & 🧭 TL Decision Support**: Address the biggest risks found.
-7. **🎯 Recommended Actions**: Actionable next steps.
-8. **📋 Detailed Data**:
-   - Backlog Metrics (Open vs Completed, overdue percentage)
-   - Dependency Risks (circular loops, blocking dependencies)
-9. **⚠️ Data Quality**: Note if hierarchy sampling was used or if metrics (like points) were missing.
-
-Ensure you state: "No Azure DevOps changes were made. KaarPulse is read-only for Azure DevOps."
+   | Delivery | 🟢/🟡/🟠/🔴 | measured reason |
+   | Schedule | | |
+   | Workload | | |
+   | Backlog | | |
+   | Dependencies | | |
+   | Data Quality | | |
+   | Sprint | | |
+4. **🚨 What Needs Attention** — top problem groups with counts.
+5. **🔎 Azure DevOps Queries** — real `create_ado_query` links for groups with count > 3.
+6. **🧠 Insights** — why the project has this status (patterns, not a repeat of the score).
+7. **💡 Recommendations**, **🧭 TL Decision Support**, **🎯 Actions**.
+8. Footer: **ADO Work Items Modified: No**.
 
 ## Edge Cases
 
@@ -182,7 +186,7 @@ Ensure you state: "No Azure DevOps changes were made. KaarPulse is read-only for
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only.** A health report invites action. None of it happens here; every run ends with the read-only statement.
+- **Read-only for work items.** A health report invites action. None of it happens here; every run ends stating no work items were modified. Saved queries via `create_ado_query` are allowed.
 - **Ratings are the server's, presentation is this skill's.** Never present the five-dimension view as though Azure DevOps produced those names, and never present a mapped rating as a fresh measurement.
 - **Sampled is not counted.** Hierarchy and staleness findings always carry their sample size; extrapolating a sample to the backlog would be fabrication. Counts, ratings, reasons and dates all come from tool calls made in this run, and unknown is not zero.
 - **No performance judgements.** Resource Health describes distribution of work, never the capability of the people holding it. Assume the report could be forwarded to the whole team.

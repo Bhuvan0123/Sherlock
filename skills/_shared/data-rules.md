@@ -71,6 +71,12 @@ The same work item can legitimately appear in several buckets — an item can be
 
 Fields commonly absent in real projects: due date, story points, remaining work, priority, area path detail, and email address on an identity. Treat every one as optional. When a calculation depends on a missing field, either exclude the item and report how many were excluded, or report the metric as unavailable. Never substitute a default.
 
+Call `ado_get_field_mapping` before writing WIQL that mentions planned or actual dates. Only use field reference names the mapping (or `ado_get_work_item_fields`) shows exist.
+
+## Saved query URLs are measured too
+
+A query navigation link is a fact. It may only appear when `create_ado_query` returned `savedQueryUrl`, `navigationUrl` or `existingQueryUrl`. Never construct `https://dev.azure.com/.../_queries/...` from an id you did not receive.
+
 ## Handle completed and removed work correctly
 
 - Open-work tools exclude completed items by default; several accept `include_completed`.

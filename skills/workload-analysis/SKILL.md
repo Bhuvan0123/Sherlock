@@ -2,7 +2,7 @@
 name: workload-analysis
 title: Workload Analysis
 description: Measure how work is distributed across the Platform team and classify each member's load as Under-utilised, Balanced, High, Overloaded or Unknown, using live Azure DevOps item counts, effort, overdue and blocked work, priority and sprint capacity.
-version: 1.0.0
+version: 2.0.0
 category: analysis
 mutates_azure_devops: false
 requires_confirmation: false
@@ -17,10 +17,17 @@ supporting_tools:
   - ado_get_blocked_items
   - ado_get_team_members
   - analysis_member_work
+  - analysis_schedule_variance
+  - ado_get_unassigned_items
+  - ado_get_high_priority_items
+  - ado_query_work_items
+  - ado_get_field_mapping
+  - create_ado_query
 missing_capabilities:
   - "Azure DevOps holds no leave, holiday or part-time allocation data, so a light load cannot be distinguished from an absence."
   - "There is no record of work done outside Azure DevOps - support rotas, meetings, interviews and incident duty are invisible to every workload number here."
   - "Sprint capacity is only known where a human configured it on the iteration; where it is unset, load cannot be compared against available hours."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - who is overloaded
   - show me team workload
@@ -98,7 +105,8 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 7. **Call `analysis_available_team_members`** when at least one member is classified `High` or `Overloaded`, so the balancing options name people with measured spare capacity rather than guesses.
 8. **Drill in where it matters.** For each `Overloaded` member, call `analysis_member_workload` to obtain the actual active, blocked, overdue and high-priority item lists, so the overload section names items rather than only counts.
 9. **Build the output** in the order given in Output Format. Every row carries its factors; every risk carries its ids.
-10. **Close with the read-only statement.** Nothing in this analysis assigns, moves or changes anything.
+10. **Group team-level categories** — overloaded members' active work (one query for the overloaded set, not one query per person), overdue work, unassigned work, high-priority active work, work with measured schedule variance. Follow `_shared/query-workflow.md`: count > 3 → `create_ado_query`; count <= 3 → list items. Titles such as `Platform - Overdue Work`, `Platform - Unassigned Work`, `Platform - High Priority Active Work`. Do not create a per-member query unless the Team Lead named that member.
+11. **Close with the source footer.** Nothing in this analysis assigns, moves or changes work items. Saved queries are listed with real URLs.
 
 If `analysis_work_distribution` fails, continue from `analysis_team_workload` alone, apply the classification rules yourself, and say that the evenness interpretation is missing.
 
@@ -137,15 +145,12 @@ Use the templates from `_shared/templates/` to construct the response.
 3. **👥 Team Workload**:
    | Member | Active | Pending | Effort | Overdue | Blocked | Load |
    |---|---:|---:|---:|---:|---:|---|
-   (Show `unknown` for Effort if missing. Load is the classification).
-4. **Workload Distribution (Visual)**:
-   Provide bar charts using block characters (`████████████████`) scaled relative to the highest workload metric.
-5. **🚨 Overload Risks & 🔎 Key Findings**: Detail the most pressing risks based on the `Overloaded` classification factors.
-6. **🧠 AI Analysis**: Show the factors that led to the classifications (e.g., 2x median, 3 overdue).
-7. **💡 Recommended Balancing Options**: Provide 1-2 prioritized recommendations for shifting work based on measured spare capacity.
-8. **🧭 TL Decision Support**: If a reallocation is needed, provide Options A/B/C for who should take it.
-
-Ensure you state: "Nothing was assigned, reassigned or modified. KaarPulse is read-only for Azure DevOps."
+   Show `unknown` for Effort if missing. Load is the classification. Then workload bars scaled to the highest measured active count.
+4. **🔎 Workload Patterns**: team-level patterns (concentration, unassigned pile, overdue clustered on one person) — not a repeat of the table.
+5. **🚨 Overload Risks**: `Overloaded` rows with factors and named items (or a query if that member's overdue/blocked set has count > 3).
+6. **🔎 Relevant Queries**: Title | Description | Count | Navigate from `create_ado_query` only.
+7. **💡 Recommended Balancing Options** and **🧭 TL Decision Support**.
+8. Footer: **ADO Work Items Modified: No**. Nothing was assigned, reassigned or modified.
 
 ## Edge Cases
 
@@ -169,7 +174,7 @@ Ensure you state: "Nothing was assigned, reassigned or modified. KaarPulse is re
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only.** This skill identifies work that ought to move. It cannot move it. Every output ends with the statement that nothing was assigned or modified.
+- **Read-only for work items.** This skill identifies work that ought to move. It cannot move it. Every output ends with the statement that nothing was assigned or modified. Saved queries via `create_ado_query` are allowed.
 - **No performance judgements.** Workload classes describe the work in a person's queue, never the person. Assume the output could be forwarded to the member it describes.
 - **Unknown is not zero.** An unset effort field, an unmeasurable due date and a genuine zero are three different findings and are reported differently.
 - **No invented data.** Names, ids, counts, hours and capacities come from tool calls made in this run. Never estimate an effort value to fill a cell.

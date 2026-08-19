@@ -1,19 +1,26 @@
-# Shared Output Format: KaarPulse Dashboard
+# Shared Output Format: KaarPulse Decision Support
 
-Every skill must produce output that acts as an intelligent Team Lead decision-support assistant.
-Responses must resemble a compact, visually rich management dashboard inside Claude, NOT a raw API report.
+Every skill must produce output that acts as a Team Lead decision-support dashboard, not a raw Azure DevOps dump.
+
+## Pipeline
+
+Follow `_shared/query-workflow.md`:
+
+FETCH → ANALYSE → GROUP → COUNT → IDENTIFY SIGNIFICANT CATEGORIES → CREATE ADO QUERY → RETURN QUERY URL → VISUALIZE → EXPLAIN INSIGHTS → RECOMMEND ACTIONS → SUPPORT TEAM LEAD DECISION
+
+Do not list hundreds of work items. Group them. If a category has more than 3 items, create a saved Azure DevOps query and link it. If a category has 3 or fewer items, list those items directly.
 
 ## Principles
 
-- **Lead with what needs attention.** The Team Lead should understand the situation within 30-60 seconds.
-- **Visual over text.** Use headings, compact tables, emojis, status indicators, and progress bars. Avoid excessive paragraphs.
-- **Separate fact from judgement.** Facts must come from Azure DevOps. Analysis and Recommendations must be clearly separated and identified.
-- **Actionable.** Always finish with what the Team Lead should do next, and differentiate what KaarPulse can do vs what the TL must do.
-- **Read-only.** KaarPulse never modifies Azure DevOps on its own.
+- **Lead with what needs attention.** The Team Lead should understand the situation within 30–60 seconds.
+- **Visual over text.** Use headings, compact tables, status indicators and progress bars. Avoid long paragraphs.
+- **Separate fact from judgement.** Facts come from Azure DevOps tools. Insights and recommendations are generated and labelled as such.
+- **Actionable.** Finish with what the Team Lead should do next, and distinguish what KaarPulse can do (create a saved query, draft email) from what the TL must do in Azure DevOps.
+- **Work items stay read-only.** KaarPulse never creates, updates, assigns or closes work items. Creating a saved query via `create_ado_query` is the only permitted Azure DevOps write.
+- **Auditable.** Every insight traces to work-item ids, a saved query, or named tool output. Prefer `Evidence: [🔗 Open Query](url)` when a query exists.
 
 ## Status Indicators
 
-Use these indicators consistently in tables, lists, and summaries:
 - 🟢 Healthy / On Track / Low Risk
 - 🟡 Attention / Medium Risk
 - 🟠 At Risk / Elevated Risk
@@ -21,57 +28,136 @@ Use these indicators consistently in tables, lists, and summaries:
 - 🔵 Informational / Recommendation Only
 - ⚪ Unknown / Not Available / Missing Data
 
-## Dashboard Structure
-
-Every major skill should follow this conceptual structure:
+## Standard response architecture
 
 ```markdown
-# 📊 KaarPulse — <Skill or Analysis Name>
+# 📊 KaarPulse — <Analysis Name>
 
-**<Project/Team>** | `<date/time>` | `Azure DevOps Live Data`
+> 🟢 / 🟡 / 🟠 / 🔴 **Executive Summary:** one concise explanation of the current situation.
 
-> <indicator> **Executive Summary:** One or two sentences explaining the current situation, supported by data, highlighting the biggest concern or primary TL focus.
+**Project / Team** | `<timestamp>` | `Azure DevOps Live Data`
+
+---
 
 ## 📌 At a Glance
-(A compact KPI table, e.g., Members, Pending, Overdue, Blocked, Load)
+KPI table. Never invent a value.
 
-## 🚨 What Needs Your Attention / Key Findings
-(3-7 important findings or critical items. Explain: What -> Why it matters -> Impact -> Evidence)
+## 🚨 What Needs Attention
+Highest-impact findings only. Do not dump every item.
+
+## 🔎 Key Findings
+Each finding: What, Count, Why it matters, Impact.
+If count > 3, a saved query must exist for that category.
+
+## 🔗 Azure DevOps Queries
+
+| Title | Description | Count | Navigate |
+|---|---|---:|---|
+| Platform - Overdue Work | Open items past planned end | 8 | [🔗 Open Query](ACTUAL_SAVED_QUERY_URL) |
+
+Only rows for queries `create_ado_query` actually created or reused.
+
+## 🧠 Insights
+Patterns, trends, risks, schedule / workload / governance implications.
+Do not merely repeat the table. Percentages only when the denominator was measured.
 
 ## ⚠️ Risks
-(Risk table: Risk, Severity, Evidence, Potential Impact, TL Attention)
 
-## 🧠 Analysis
-(AI reasoning and deeper interpretation based on facts)
+| Risk | Severity | Evidence | Impact |
+|---|---|---|---|
 
 ## 💡 Recommendations
-(Prioritised, specific, evidence-based, actionable suggestions)
+
+### 🔴 Recommendation 1
+
+**Action:** ...
+**Why:** ...
+**Expected impact:** ...
+**When:** Today / This week / Optional
+**Evidence:** [🔗 Open Query](...) when a query exists
+**Confidence:** High / Medium / Low
 
 ## 🧭 TL Decision Support
-(For important issues, provide Options A/B/C with trade-offs, and a specific KaarPulse Recommendation)
+
+### Situation
+...
+
+### Option A
+Pros / Cons
+
+### Option B
+Pros / Cons
+
+### KaarPulse Recommendation
+The Team Lead remains the final decision maker.
 
 ## 🎯 Recommended Actions
-(Categorised by: 🔴 Today, 🟡 This Week, 🔵 Optional. Include Action, Type, and Status (🟢 Can perform / 🟡 Needs TL / 🔴 Not supported))
 
-## 📋 Detailed Data
-(Underlying data tables, workloads, deadlines)
+### 🔴 Today
+1. ...
 
-## ⚠️ Data Quality
-(Missing or limited information affecting the analysis)
+### 🟠 This Week
+2. ...
+
+### 🔵 Optional
+3. ...
+
+## ⚠️ Data Quality / Limitations
+Missing fields, truncated lists, mapping gaps, query-folder failures.
+
+---
+**Source:** Live Azure DevOps
+**Project:** <from tool>
+**Team:** <from tool>
+**ADO Work Items Modified:** No
 ```
 
-## Work-item References
-Always render a work item as:
+A skill may omit Decision Support when no real choice exists. A skill may add a domain section (workload bars, sprint progress, hierarchy, forecast) **before** Insights, but must not skip At a Glance, What Needs Attention, Insights, Recommendations, Actions, or Data Quality on a major analysis.
+
+## Visualisation
+
+Use visual Markdown when the underlying data supports the metric. Never invent percentages.
+
+Sprint:
+
+`██████████████░░░░░░ 70%`
+
+Workload (scale bars to the highest measured load in this response):
+
+```
+Arun     ████████████████ 🔴 High
+Rahul    ██████████       🟡 Moderate
+Karthik  █████            🟢 Low
+```
+
+Schedule (only when planned vs actual figures were returned):
+
+```
+Planned  ███████████████░░░ 75%
+Actual   ████████████░░░░░░ 60%
+```
+
+Issue distribution (only with real category counts):
+
+```
+Missing Dates       ████████████████ 8 🔴
+Missing Estimates   ████████         4 🟠
+```
+
+Build bars with `█` and `░`. State the measured value next to the bar.
+
+## Work-item references
+
+When listing 3 or fewer items, render each as:
+
 `#1234 — "Exact title from Azure DevOps"` (Type, State, Assignee)
 
-## Tables and Data
-- Keep cells short. Use tables for comparable rows. 
-- Use `—` for a value that does not apply and `unknown` for missing values. Never invent data.
-- If a progress bar is used, build it with block characters: `██████████████░░░░░░` 70%. Never fake percentages.
+Never paraphrase titles. Use `—` for not applicable and `unknown` for missing values. Never invent data.
+
+## Query links
+
+The "Open Query" text must be a markdown link to the URL returned by `create_ado_query` (`savedQueryUrl` preferred, else `navigationUrl`). Never construct a query URL. Never use a placeholder.
 
 ## Stating what was not done
-Any skill that produces recommendations about work items must explicitly state that no changes were made.
-KaarPulse is read-only for Azure DevOps.
 
-## Drill-down Support
-Structure the response to allow the TL to easily ask follow-up questions. E.g., "Showing 10 highest-priority items. X additional items available."
+Every skill that recommends a work-item change must state that **no work items were modified**. Saved-query creation, when it happened, is reported separately with the real URL.

@@ -21,12 +21,18 @@ import { connectTestClient, type ConnectedClient } from '../helpers/mcp-client.j
 import { setupHarness, type Harness } from '../helpers/harness.js';
 
 const EXPECTED_SKILLS = [
+    'backlog-data-quality',
     'daily-standup-starter',
     'daily-team-report',
     'deadline-risk-analysis',
+    'delivery-forecast',
+    'dependency-analysis',
+    'hierarchy-health-analysis',
     'project-health-analysis',
+    'schedule-variance-analysis',
     'skill-index',
     'sprint-health-analysis',
+    'stale-work-analysis',
     'team-email-assistant',
     'team-morning-brief',
     'team-productivity-review',
@@ -41,11 +47,17 @@ const EXPECTED_SKILLS = [
  * must be documented in the router, pointing at this skill.
  */
 const ROUTING_EXAMPLES: [question: string, skill: string][] = [
+    ['find backlog issues', 'backlog-data-quality'],
     ['give me today\'s team status', 'team-morning-brief'],
     ['who is overloaded', 'workload-analysis'],
     ['what work is at risk', 'deadline-risk-analysis'],
+    ['when will we deliver', 'delivery-forecast'],
+    ['what is blocking us', 'dependency-analysis'],
+    ['check hierarchy health', 'hierarchy-health-analysis'],
     ['how is the project doing', 'project-health-analysis'],
+    ['check schedule variance', 'schedule-variance-analysis'],
     ['how is this sprint', 'sprint-health-analysis'],
+    ['find stale work items', 'stale-work-analysis'],
     ['who should take this task', 'work-assignment-recommendation'],
     ['how productive is the team', 'team-productivity-review'],
     ['how am i doing as tl', 'tl-productivity-review'],
@@ -81,6 +93,7 @@ describe('skill discovery', () => {
             'analysis-rules',
             'data-rules',
             'output-format',
+            'query-workflow',
             'safety-rules'
         ]);
         for (const document of shared) {
@@ -93,6 +106,14 @@ describe('skill discovery', () => {
         expect(safety).toContain('read-only');
         expect(safety).toContain('confirmation');
         expect(safety).toContain('never fabricate');
+        expect(safety).toContain('create_ado_query');
+    });
+
+    it('publishes the shared query workflow with the count > 3 rule', () => {
+        const query = getSharedRules().find(document => document.name === 'query-workflow')!.content.toLowerCase();
+        expect(query).toContain('count > 3');
+        expect(query).toContain('create_ado_query');
+        expect(query).toContain('savedqueryurl');
     });
 });
 
@@ -228,6 +249,16 @@ describe('skill safety contract', () => {
     it('records the capabilities that are genuinely unavailable rather than inventing them', () => {
         const withGaps = skills.filter(skill => skill.missingCapabilities.length > 0);
         expect(withGaps.length, 'no skill documents a missing capability, which is implausible').toBeGreaterThan(3);
+    });
+
+    it('routes significant categories through create_ado_query rather than dumping items', () => {
+        const exempt = new Set(['skill-index']);
+        for (const skill of skills.filter(candidate => !exempt.has(candidate.name))) {
+            const tools = [...skill.primaryTools, ...skill.supportingTools];
+            expect(tools, `${skill.name} must use the central query tool`).toContain('create_ado_query');
+            const text = `${skill.sections.Workflow ?? ''} ${skill.sections['Analysis Rules'] ?? ''} ${skill.sections['Output Format'] ?? ''}`.toLowerCase();
+            expect(text, `${skill.name} must state the count > 3 query rule`).toMatch(/count > 3|more than three/);
+        }
     });
 });
 

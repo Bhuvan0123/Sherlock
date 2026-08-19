@@ -4,6 +4,7 @@ import { parseAdoDate } from '../../utils/dates.js';
 import { getAdoClient, type AzureDevOpsReadClient } from './client.js';
 import { getProjectContext, type ProjectContextService } from './context.js';
 import { FIELD, RELATION, type StateCategory } from './fields.js';
+import { FieldMappingService, type CanonicalFieldMap } from './field-mapping.js';
 import type {
     AdoComment,
     AdoIdentityRef,
@@ -104,6 +105,39 @@ function parseTags(value: unknown): string[] {
         .filter(tag => tag.length > 0);
 }
 
+/** Strips HTML tags and collapses whitespace for quality checks. */
+export function plainText(value: unknown): string | null {
+    if (value == null) return null;
+    const raw = typeof value === 'string' ? value : String(value);
+    const stripped = raw
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return stripped.length > 0 ? stripped : null;
+}
+
+function collectExtraFields(fields: Record<string, unknown>): Record<string, string | number | null> {
+    const extra: Record<string, string | number | null> = {};
+    for (const [key, value] of Object.entries(fields)) {
+        const lower = key.toLowerCase();
+        if (
+            lower.startsWith('custom.') ||
+            lower.startsWith('k4k.') ||
+            lower.includes('.k4k') ||
+            lower.includes('integration') ||
+            (lower.includes('spirit') && !lower.startsWith('system.'))
+        ) {
+            if (typeof value === 'number' && Number.isFinite(value)) extra[key] = value;
+            else extra[key] = stringOrNull(value);
+        }
+    }
+    return extra;
+}
+
 /** Extracts the numeric work-item id from an Azure DevOps relation URL. */
 export function relationTargetId(relation: AdoWorkItemRelation): number | null {
     const match = /\/workItems\/(\d+)(?:$|\?)/i.exec(relation.url ?? '');
@@ -123,9 +157,17 @@ export class WorkItemService {
     // ------------------------------------------------------------- normalisation
 
     /** Converts a raw Azure DevOps work item into the normalised analysis shape. */
-    normalise(raw: AdoWorkItem): WorkItem {
+    normalise(raw: AdoWorkItem, map: CanonicalFieldMap): WorkItem {
         const fields = raw.fields ?? {};
         const get = (reference: string): unknown => fields[reference];
+        
+        const getMappedDate = (refs: string[]) => {
+            for (const r of refs) {
+                const val = isoOrNull(get(r));
+                if (val) return val;
+            }
+            return null;
+        };
 
         return {
             id: raw.id,
@@ -148,6 +190,10 @@ export class WorkItemService {
             startDate: isoOrNull(get(FIELD.startDate)),
             dueDate: isoOrNull(get(FIELD.dueDate)),
             targetDate: isoOrNull(get(FIELD.targetDate)) ?? isoOrNull(get(FIELD.finishDate)),
+            plannedStart: getMappedDate(map.plannedStart),
+            plannedEnd: getMappedDate(map.plannedEnd),
+            actualStart: getMappedDate(map.actualStart),
+            actualEnd: getMappedDate(map.actualEnd),
             iterationPath: stringOrNull(get(FIELD.iterationPath)),
             areaPath: stringOrNull(get(FIELD.areaPath)),
             priority: numberOrNull(get(FIELD.priority)),
@@ -162,7 +208,15 @@ export class WorkItemService {
             blockedField: stringOrNull(get(FIELD.blocked)),
             url: raw.url ?? null,
             webUrl: this.client.buildWorkItemWebUrl(this.project, raw.id),
-            relations: raw.relations ?? []
+            relations: raw.relations ?? [],
+            description: plainText(get(FIELD.description)),
+            acceptanceCriteria: plainText(get(FIELD.acceptanceCriteria)),
+            reproSteps: plainText(get(FIELD.reproSteps)),
+            valueArea: stringOrNull(get(FIELD.valueArea)),
+            risk: stringOrNull(get(FIELD.risk)),
+            businessValue: numberOrNull(get(FIELD.businessValue)),
+            activity: stringOrNull(get(FIELD.activity)),
+            extraFields: collectExtraFields(fields)
         };
     }
 
@@ -193,7 +247,8 @@ export class WorkItemService {
             throw new AppError('INVALID_INPUT', `"${id}" is not a valid Azure DevOps work-item id.`);
         }
         const raw = await this.client.getWorkItem(this.project, id, options.includeRelations === false ? 'none' : 'relations');
-        const [item] = await this.withStateCategories([this.normalise(raw)]);
+        const map = await new FieldMappingService(this.project).getCanonicalMap();
+        const [item] = await this.withStateCategories([this.normalise(raw, map)]);
         if (!item) throw new AppError('NOT_FOUND', `Work item #${id} was not found.`);
         return item;
     }
@@ -206,7 +261,8 @@ export class WorkItemService {
             ids,
             options.includeRelations ? { expandRelations: true } : { fields }
         );
-        const normalised = await this.withStateCategories(raw.map(item => this.normalise(item)));
+        const map = await new FieldMappingService(this.project).getCanonicalMap();
+        const normalised = await this.withStateCategories(raw.map(item => this.normalise(item, map)));
         // Preserve the requested order (WIQL relevance / sort order).
         const byId = new Map(normalised.map(item => [item.id, item]));
         return ids.map(id => byId.get(id)).filter((item): item is WorkItem => item !== undefined);

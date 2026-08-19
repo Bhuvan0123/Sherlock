@@ -85,23 +85,22 @@ describe('exposed tool surface', () => {
         expect(offenders.map(tool => tool.name)).toEqual([]);
     });
 
-    it('names every non-email tool with a read verb', () => {
-        // An independent check that does not reuse the policy regexes: every tool
-        // outside the email surface must announce itself as a read, an analysis or
-        // a local-audit operation.
-        const readVerb = /^(ado_(get|search|refresh)_|analysis_|tl_(get|analyze|purge)_|skill_(list|get)$)/;
+    it('names every non-email tool with a read verb, except saved-query creation', () => {
+        const readVerb = /^(ado_(get|search|refresh|query)_|analysis_|tl_(get|analyze|purge)_|skill_(list|get)$|create_ado_query$)/;
         for (const tool of tools.filter(candidate => !candidate.name.startsWith('email_'))) {
             expect(tool.name, `tool ${tool.name} is not named as a read operation`).toMatch(readVerb);
         }
     });
 
-    it('has no tool containing a mutation verb', () => {
+    it('has no tool containing a mutation verb except create_ado_query', () => {
         const mutationVerbs = ['create', 'update', 'delete', 'edit', 'modify', 'patch', 'write', 'post_', 'put_', 'reopen', 'reassign'];
         for (const tool of tools) {
+            if (tool.name === 'create_ado_query') continue;
             for (const verb of mutationVerbs) {
                 expect(tool.name.toLowerCase(), `tool ${tool.name} contains mutation verb "${verb}"`).not.toContain(verb);
             }
         }
+        expect(tools.map(tool => tool.name)).toContain('create_ado_query');
     });
 
     it('never accepts an HTTP method, URL, header or credential parameter', () => {
@@ -132,9 +131,9 @@ describe('exposed tool surface', () => {
         expect(violations).toEqual([]);
     });
 
-    it('marks every tool except confirmed email sending as read-only', () => {
-        const nonReadOnly = tools.filter(tool => tool.annotations?.readOnlyHint !== true).map(tool => tool.name);
-        expect(nonReadOnly).toEqual(['email_send_confirmed']);
+    it('marks every tool except confirmed email sending and saved-query creation as read-only', () => {
+        const nonReadOnly = tools.filter(tool => tool.annotations?.readOnlyHint !== true).map(tool => tool.name).sort();
+        expect(nonReadOnly).toEqual(['create_ado_query', 'email_send_confirmed']);
     });
 
     it('marks no tool as destructive', () => {

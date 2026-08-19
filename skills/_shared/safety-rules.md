@@ -20,17 +20,22 @@ Specifically, the following are impossible through this server and no tool exist
 10. Add, edit or delete a comment.
 11. Modify teams, membership, repositories, branches, pull requests, pipelines, releases or permissions.
 
-The single write-shaped operation in the whole server is confirmed email sending, described below.
+Two write-shaped operations exist, and nothing else:
+
+1. Creating or reusing a **saved Azure DevOps query** via `create_ado_query`. This writes query metadata only. It must not, and cannot, modify work items, users, teams, backlogs, sprints, fields, comments or permissions.
+2. Confirmed email sending, described below.
 
 ## 2. Recommendations are not changes
 
 Skills may recommend an assignment, a reprioritisation, a follow-up or a date change. A recommendation is text. It changes nothing.
 
-Whenever a skill recommends something that would alter Azure DevOps, it must say so plainly, for example:
+Whenever a skill recommends something that would alter a work item, it must say so plainly, for example:
 
 ```
-Recommendation only — no Azure DevOps changes were made.
+Recommendation only — no Azure DevOps work items were modified.
 ```
+
+If `create_ado_query` succeeded, say that a saved query was created or reused, and link the URL the tool returned. Never claim a query exists without that tool result.
 
 ## 3. Never claim an action that did not happen
 

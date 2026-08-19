@@ -11,6 +11,7 @@ export type ActivityCategory =
     | 'email_send'
     | 'confirmation'
     | 'recommendation_review'
+    | 'query_management'
     | 'maintenance';
 
 export type ActivityOutcome = 'success' | 'error' | 'rejected';

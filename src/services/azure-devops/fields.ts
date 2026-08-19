@@ -40,7 +40,13 @@ export const FIELD = {
     originalEstimate: 'Microsoft.VSTS.Scheduling.OriginalEstimate',
     remainingWork: 'Microsoft.VSTS.Scheduling.RemainingWork',
     completedWork: 'Microsoft.VSTS.Scheduling.CompletedWork',
-    blocked: 'Microsoft.VSTS.CMMI.Blocked'
+    blocked: 'Microsoft.VSTS.CMMI.Blocked',
+    description: 'System.Description',
+    acceptanceCriteria: 'Microsoft.VSTS.Common.AcceptanceCriteria',
+    reproSteps: 'Microsoft.VSTS.TCM.ReproSteps',
+    risk: 'Microsoft.VSTS.Common.Risk',
+    businessValue: 'Microsoft.VSTS.Common.BusinessValue',
+    activity: 'Microsoft.VSTS.Common.Activity'
 } as const;
 
 /** Fields requested for every work item read. Filtered against the real catalogue. */

@@ -75,6 +75,16 @@ Two things moving together is an observation. Do not assert that one caused the 
 - Age in current state is a useful staleness signal; `analysis_blocked_items` flags items unchanged for five or more days.
 - A due date in the past on a completed item is not overdue. Overdue means past due *and* not in a completed state.
 
+## Group, count, then query — do not dump items
+
+After fetching, group work items into meaningful categories (overdue, missing planned end, stale 14+ days, blocked, unassigned, and so on). Count each category.
+
+- If count > 3: create or reuse one saved query through `create_ado_query` (see `_shared/query-workflow.md`) and show the count plus the real query link. Do not paste the full item list.
+- If count <= 3: list the items directly when useful. Do not create a saved query unless the category is strategically important.
+- If count is 0: say so. Do not create an empty query.
+
+Insights must explain significance, not repeat the count. A percentage is allowed only when both numerator and denominator were measured in this run.
+
 ## Recommendations must be actionable and honest about ownership
 
 A recommendation names what to do, who it concerns and why now. It must also be honest that KaarPulse cannot perform it: every change happens in Azure DevOps, by a human.

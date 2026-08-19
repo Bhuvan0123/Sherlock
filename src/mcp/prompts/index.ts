@@ -5,7 +5,7 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('mcp-prompts');
 
 const READ_ONLY_REMINDER =
-    'Azure DevOps is read-only through this server: you may read and analyse, and you may recommend, but you cannot create, update, delete or assign anything. If asked to change a work item, say so plainly and offer to draft an email or produce a recommendation instead.';
+    'Azure DevOps work items are read-only through this server: you may read and analyse, and you may recommend, but you cannot create, update, delete or assign work items. Saved queries via create_ado_query are allowed and always go under My Queries/KaarFlow. If asked to change a work item, say so plainly and offer to draft an email or produce a recommendation instead.';
 
 const LABELLING_REMINDER =
     'Keep measured Azure DevOps data separate from your own interpretation. Every analysis tool returns `facts` (measured) alongside `observations`, `concerns` and `recommendations` (generated). Present them as such, cite work items as "#<id> <title>", and never invent an item, person, date or metric that is not in the tool output.';

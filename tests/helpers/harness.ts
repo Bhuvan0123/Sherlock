@@ -11,6 +11,7 @@ import { Database, setDatabaseForTesting } from '../../src/database/connection.j
 import { setActivityRepositoryForTesting } from '../../src/database/repository/activity.repository.js';
 import { setEmailRepositoryForTesting } from '../../src/database/repository/email.repository.js';
 import { AzureDevOpsReadClient, setAdoClientForTesting } from '../../src/services/azure-devops/client.js';
+import { AzureDevOpsWriteClient, setAdoWriteClientForTesting } from '../../src/services/azure-devops/write-client.js';
 import { setProjectContextForTesting } from '../../src/services/azure-devops/context.js';
 import { setTeamServiceForTesting } from '../../src/services/azure-devops/team.service.js';
 import { setSprintServiceForTesting } from '../../src/services/azure-devops/sprint.service.js';
@@ -98,6 +99,7 @@ export function setupHarness(options: HarnessOptions = {}): Harness {
 
     const fixture = createAdoFixture(options);
     setAdoClientForTesting(new AzureDevOpsReadClient(fixture.fetchImpl));
+    setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fixture.fetchImpl));
 
     const graphRequests: { url: string; method: string; body: unknown }[] = [];
     const graphFetch =
@@ -148,6 +150,7 @@ export function setupHarness(options: HarnessOptions = {}): Harness {
 /** Drops every cached singleton so the next `get*` call rebuilds against the harness. */
 function resetSingletons(): void {
     setAdoClientForTesting(null);
+    setAdoWriteClientForTesting(null);
     setProjectContextForTesting(null);
     setTeamServiceForTesting(null);
     setSprintServiceForTesting(null);

@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { getConfig } from '../../../config/env.js';
+import { getAdoClient } from '../../../services/azure-devops/client.js';
 import { describeRelation } from '../../../services/azure-devops/fields.js';
 import { getSprintService } from '../../../services/azure-devops/sprint.service.js';
 import { getWorkItemService } from '../../../services/azure-devops/work-item.service.js';
@@ -33,6 +35,21 @@ export function registerAdoWorkItemTools(server: McpServer): void {
         summarise: result => {
             const item = result as { id: number; type: string; title: string; state: string; assignedTo: string | null };
             return `${item.type} #${item.id} "${item.title}" - ${item.state}, ${item.assignedTo ?? 'unassigned'}.`;
+        }
+    });
+
+    registerTool(server, {
+        name: 'ado_get_work_item_fields',
+        title: 'Get work item raw fields',
+        description: 'Fetches the raw, unmapped fields of a single Azure DevOps work item. Useful for discovering what exact data exists in a custom process.',
+        group: 'azure-devops',
+        inputSchema: {
+            id: workItemId
+        },
+        audit: { category: 'work_item_lookup', action: 'Read work item fields', subject: args => `work-item:${args.id}` },
+        handler: async args => {
+            const raw = await getAdoClient().getWorkItem(getConfig().ado.project, args.id as number, 'none');
+            return raw.fields;
         }
     });
 

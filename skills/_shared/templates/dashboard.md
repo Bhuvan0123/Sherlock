@@ -16,7 +16,10 @@
 ## ⚠️ Risks Requiring Attention
 <Insert Risk Table here>
 
-## 🧠 AI Analysis
+## 🔗 Azure DevOps Queries
+<Insert the query table from `_shared/query-workflow.md`. Only queries `create_ado_query` created or reused.>
+
+## 🧠 Insights
 <AI reasoning and interpretation of the facts>
 
 ## 💡 AI Recommendations

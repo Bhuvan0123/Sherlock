@@ -3,7 +3,8 @@ import { AppError } from '../../utils/errors.js';
 import { TtlCache } from '../../utils/cache.js';
 import { createLogger } from '../../utils/logger.js';
 import { getAdoClient, type AzureDevOpsReadClient } from './client.js';
-import { DEFAULT_WORK_ITEM_FIELDS, type StateCategory } from './fields.js';
+import { DEFAULT_WORK_ITEM_FIELDS, FIELD, type StateCategory } from './fields.js';
+import { FieldMappingService } from './field-mapping.js';
 import type { AdoProject, AdoTeam } from './types.js';
 
 const log = createLogger('ado-context');
@@ -125,6 +126,39 @@ export class ProjectContextService {
     async getWorkItemFieldProjection(): Promise<string[]> {
         const available = await this.getAvailableFields();
         const projection = DEFAULT_WORK_ITEM_FIELDS.filter(field => available.has(field));
+        
+        const fieldMapping = new FieldMappingService(this.defaults.project);
+        const map = await fieldMapping.getCanonicalMap();
+        const mappedFields = [
+            ...map.plannedStart,
+            ...map.plannedEnd,
+            ...map.actualStart,
+            ...map.actualEnd,
+            FIELD.description,
+            FIELD.acceptanceCriteria,
+            FIELD.reproSteps,
+            FIELD.risk,
+            FIELD.businessValue,
+            FIELD.activity,
+            FIELD.valueArea
+        ];
+
+        for (const f of mappedFields) {
+            if (available.has(f) && !projection.includes(f)) {
+                projection.push(f);
+            }
+        }
+
+        for (const ref of available) {
+            const lower = ref.toLowerCase();
+            if (
+                (lower.startsWith('custom.') || lower.startsWith('k4k.') || lower.includes('.k4k')) &&
+                !projection.includes(ref)
+            ) {
+                projection.push(ref);
+            }
+        }
+        
         return projection.length > 0 ? projection : ['System.Id', 'System.Title', 'System.State'];
     }
 

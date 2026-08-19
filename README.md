@@ -1,66 +1,108 @@
-# KaarPulse MCP (Team Lead Decision Support)
+# KaarPulse
 
-KaarPulse is an intelligent Model Context Protocol (MCP) server that transforms Azure DevOps data into a Team Lead Decision-Support assistant. It is strictly read-only and designed to help Team Leads quickly understand sprint health, workload, blockages, and productivity.
+KaarPulse is an intelligent Team Lead decision-support assistant running via MCP. It connects to Azure DevOps and provides read-only analytical insights (plus optional saved-query creation) to help you identify risks, schedule variances, structural backlog issues, and unassigned work.
 
-## Configuration & Setup
+## Core Philosophy
 
-1. Copy `.env.example` to `.env`.
-2. Configure your strictly read-only Azure DevOps PAT (`ADO_PAT`), Organization (`ADO_ORGANIZATION`), Project (`ADO_PROJECT`), and Team (`ADO_TEAM`).
-3. (Optional) Configure Microsoft Graph email credentials (`MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `EMAIL_SENDER`) if you intend to use the email sending features.
+- **Work items stay read-only.** KaarPulse never creates, updates, assigns or closes Azure DevOps work items.
+- **Saved queries are allowed.** When a skill finds a category with more than three items, it creates or reuses a saved Boards query via `create_ado_query` and returns the real navigation URL.
+- **Actionable visuals.** Outputs follow a dashboard: *what is happening → why it matters → what I recommend → what you can do next*, with query links as evidence.
+- **Decision support.** Recommendations and options are generated; the Team Lead remains the decision maker.
 
-> [!WARNING]
-> KaarPulse is **read-only** for Azure DevOps. It cannot create, edit, reassign, or delete work items. Any recommendations it provides must be executed manually by the Team Lead. 
+## Skills
 
-## KaarPulse Skills Directory
+Skills are the core workflows that KaarPulse can run. You can invoke them using natural language. See [docs/skills.md](docs/skills.md).
 
-The assistant uses 13 defined "Skills" that govern its workflow.
+### Core Governance & Health
 
-### Briefing & Reporting
-- **`daily-standup-starter`**: A very brief, targeted summary designed specifically for the daily stand-up meeting. Identifies who is working on what, who is idle, and immediate sprint risks.
-- **`team-morning-brief`**: The Team Lead's prioritized morning triage — what needs attention today, overdue/blocked work, and workload.
-- **`daily-team-report`**: A comprehensive daily report intended to be kept, forwarded, or pasted into status updates.
-- **`weekly-team-review`**: A full review of the past working week, capturing what was completed, carried over, recurring blockers, and assistant activity.
+- **`team-morning-brief`**: Morning command-center view and TL priority queue.
+- **`project-health-analysis`**: Delivery, schedule, workload, backlog, dependencies, data quality, sprint — with *why*, not only a score.
+- **`sprint-health-analysis`**: Current sprint progress, risks, and sprint-scoped queries.
+- **`backlog-data-quality`**: Broad backlog governance (hierarchy, fields, dates, ownership, stale work, duplicates, dependencies, custom fields); one saved query per category with count > 3.
+- **`schedule-variance-analysis`**: Planned vs actual duration, late starts and completions.
+- **`hierarchy-health-analysis`**: Epic → Feature → Story → Task orphans and empty parents.
+- **`dependency-analysis`**: Blocked work, chains, cross-team waits, highest-impact blocker.
+- **`stale-work-analysis`**: Active work stale 7 / 14 / 30+ days.
+- **`delivery-forecast`**: Honest outlook when history exists; otherwise explains why a forecast is unavailable.
 
-### Analysis & Recommendations
-- **`project-health-analysis`**: An overarching review of the backlog, delivery picture, and project health.
-- **`sprint-health-analysis`**: A deep-dive into the current sprint's trajectory and risk of missing the sprint goal.
-- **`workload-analysis`**: Understands how work is distributed across the team and identifies imbalances.
-- **`deadline-risk-analysis`**: Focuses purely on what work is overdue or at risk of missing deadlines.
-- **`work-assignment-recommendation`**: Diagnoses the backlog and recommends who should pick up unassigned items.
-- **`team-productivity-review`**: Evaluates team delivery and productivity trends over the last few sprints.
-- **`tl-productivity-review`**: Analyzes the Team Lead's own management activity by reading the local assistant audit trail.
+### Productivity & Planning
 
-### Actions & Routing
-- **`team-email-assistant`**: Safely drafts emails for the team. Contains strict built-in protocols that require explicit user confirmation before any email is actually sent.
-- **`skill-index`**: The master router that helps the assistant pick the right skill for your prompt and combines skills for compound requests.
+- **`workload-analysis`**: Team workload distribution and capacity (not a performance ranking).
+- **`deadline-risk-analysis`**: Overdue, due soon, missing dates, deadline risk categories.
+- **`team-productivity-review`**: Throughput and trends without ranking people by task count.
+- **`tl-productivity-review`**: Team Lead coverage and follow-through from the local audit trail.
+- **`work-assignment-recommendation`**: Who could take an item — recommendation only, never an assignment.
 
-## KaarPulse Tools Index
+### Communication
 
-The skills are powered by an extensive suite of low-level MCP tools exposed by the server. 
+- **`team-email-assistant`**: Drafts emails from measured data; may attach a saved-query link; sends only after explicit confirmation.
+- **`daily-team-report`**: Keepable daily dashboard with queries for large groups.
+- **`weekly-team-review`**: Weekly planned vs actual, recurring problems, next-week actions.
 
-### Azure DevOps Tools (`ado_*`)
-Raw read operations from the Azure DevOps API.
-- **Work Item Queries**: `ado_get_work_item`, `ado_get_work_items`, `ado_search_work_items`, `ado_get_work_items_by_type`, `ado_get_work_items_by_state`, `ado_get_work_items_by_assignee`, `ado_get_work_items_by_sprint`.
-- **Status Queries**: `ado_get_work_items_due_today`, `ado_get_work_items_due_this_week`, `ado_get_overdue_items`, `ado_get_blocked_items`, `ado_get_unassigned_items`, `ado_get_high_priority_items`, `ado_get_recently_changed_items`.
-- **Project/Sprint Data**: `ado_get_project_overview`, `ado_get_team_members`, `ado_get_team_iterations`, `ado_get_current_sprint`, `ado_get_sprint_progress`.
-- **Context**: `ado_get_work_item_comments`, `ado_get_connection_status`.
+## MCP Tools
 
-### Analysis Tools (`analysis_*`)
-Tools that perform aggregations, calculations, and generate actionable insights from the ADO data.
-- **Health & Delivery**: `analysis_project_health`, `analysis_project`, `analysis_team_productivity`, `analysis_team_delivery_metrics`.
-- **Risk & Dependencies**: `analysis_deadline_risk`, `analysis_at_risk_items`, `analysis_deadlines`, `analysis_blocked_items`, `analysis_dependencies`, `analysis_cross_team_dependencies`, `analysis_items_blocking_release`, `analysis_critical_dependencies`.
-- **Workload & Team**: `analysis_team_workload`, `analysis_work_distribution`, `analysis_available_team_members`, `analysis_member_workload`, `analysis_member_work`, `analysis_member_completed_work`, `analysis_member_sprint_history`.
-- **Aggregations**: `analysis_daily_team_review`, `analysis_assignment_recommendation`, `analysis_assignment_recommendations`.
+### Azure DevOps Access (`ado_*`)
+- `ado_get_project_overview`, `ado_get_project_teams`, `ado_get_team_members`
+- `ado_get_work_item`, `ado_get_work_items`, `ado_query_work_items`
+- `ado_get_work_item_fields`, `ado_get_field_mapping`
+- `ado_get_blocked_items`, `ado_get_overdue_items`, sprint and backlog reads
 
-### Email Tools (`email_*`)
-Tools mapping to Microsoft Graph for communication.
-- **Config & Contacts**: `email_get_team_contacts`, `email_get_configuration`.
-- **Drafting**: `email_draft`, `email_draft_deadline_reminder`, `email_draft_overdue_work`, `email_draft_daily_team_summary`.
-- **Management**: `email_list_drafts`, `email_cancel_draft`, `email_send_confirmed`, `email_get_send_log`.
+### Analytics (`analysis_*`)
+- `analysis_project_health`, `analysis_team_productivity`, `analysis_deadline_risk`
+- `analysis_backlog_quality`, `analysis_schedule_variance`, `analysis_hierarchy_health`, `analysis_stale_work`
+- Workload, assignment, dependency and daily-review composites
 
-### Team Lead Activity Tools (`tl_*`)
-Tools that read from the local SQLite audit log to track the TL's assistant usage.
-- `tl_get_activity`, `tl_get_activity_summary`, `tl_analyze_activity`, `tl_analyze_productivity`, `tl_analyze_work_management`, `tl_get_weekly_review`, `tl_purge_activity`.
+### Email
+- `email_draft*` tools create a draft only
+- `email_send_confirmed` sends after explicit confirmation
 
-### Skills Catalog Tools (`skill_*`)
-- `skill_list` (list available workflows) and `skill_get` (load a specific skill's instructions).
+### Query Management (`create_ado_query`)
+
+Creates a saved Azure DevOps Boards query from validated WIQL. Does not modify work items.
+
+**Input (main fields):** `project` (optional, defaults to configured project), `queryName`, `queryDescription`, `wiql`, `columns`, `parentPath` (optional, defaults to `My Queries/KaarFlow`).
+
+**Output:** `queryId`, `resultCount`, `fieldsIncluded`, `savedQueryUrl`, `navigationUrl`. If the title already exists, returns `QUERY_ALREADY_EXISTS` with `existingQueryUrl` / `savedQueryUrl` and `resultCount` for reuse.
+
+See [docs/query-engine.md](docs/query-engine.md) and [docs/query-fields.md](docs/query-fields.md).
+
+**Architecture:**
+
+```mermaid
+flowchart TD
+    User([Team Lead / Claude]) --> Agent[KaarPulse assistant]
+    Agent --> MCP[Local KaarPulse MCP]
+    subgraph Local MCP
+        Read[ado_query_work_items / analysis_*]
+        Tool[create_ado_query]
+        Tool --> Validate[WIQL Validation]
+        Validate -- Valid --> API[Azure DevOps REST API]
+    end
+    subgraph Azure DevOps
+        API --> QueryWiql[POST /_apis/wit/wiql]
+        QueryWiql -.-> Count[Result Count]
+        API --> CreateQuery[POST /_apis/wit/queries]
+        CreateQuery -.-> QueryMeta[Query Metadata]
+    end
+    Count & QueryMeta --> URL[Navigation URL]
+    URL --> Response[KaarPulse dashboard]
+    Response --> Agent
+    Agent --> User
+```
+
+## Count > 3 rule
+
+Skills group work items into categories. Categories with more than three items get a saved query and a clickable Open Query link. Smaller sets are listed in the chat.
+
+## Security & Permissions
+
+Analytical tools are read-only. `create_ado_query` is the only Azure DevOps write, and it writes query metadata only. Confirmed email sending is the only outbound message send. No PATs, secrets, or headers are exposed to the LLM.
+
+## Getting Started
+
+Ask "Show me the morning brief" or "Check backlog data quality" to see KaarPulse in action.
+
+## Testing
+
+- `npm test` — unit and MCP contract tests, including the skill catalogue.
+- `npm run inspector` — MCP Inspector for live tool calls (overdue, missing dates, stale, unassigned, sprint, high priority, query create).

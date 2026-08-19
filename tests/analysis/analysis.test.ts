@@ -403,3 +403,24 @@ describe('daily team review', () => {
         expect(JSON.stringify(envelope.recommendations)).toMatch(/#\d{4}/);
     });
 });
+
+describe('backlog governance analysis', () => {
+    it('returns counted categories across multiple dimensions without mutating work items', async () => {
+        const envelope = await mcp.callToolJson<
+            Envelope<{
+                totalAnalyzed: number;
+                uniqueItemsWithIssues: number;
+                categoryCount: number;
+                queryFolder: string;
+                categories: { category: string; count: number; createQuery: boolean; queryName: string }[];
+            }>
+        >('analysis_backlog_quality');
+
+        expect(envelope.kind).toBe('backlog_quality');
+        expect(envelope.facts.totalAnalyzed).toBeGreaterThan(5);
+        expect(envelope.facts.categoryCount).toBeGreaterThan(3);
+        expect(envelope.facts.queryFolder).toBe('My Queries/KaarFlow');
+        expect(envelope.facts.categories.length).toBeGreaterThan(3);
+        expect(envelope.disclaimer).toContain('AI-GENERATED');
+    });
+});

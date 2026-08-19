@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "k4k-team-lead-assistant": {
+      "command": "node",
+      "args": [
+        "D:\\Bhuvan\\Kaar\\K4K\\Yeager\\dist\\index.js"
+      ]
+    }
+  }
+}

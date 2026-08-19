@@ -25,12 +25,15 @@ supporting_tools:
   - ado_get_sprint_progress
   - ado_get_team_members
   - analysis_daily_team_review
+  - ado_query_work_items
+  - create_ado_query
 missing_capabilities:
   - "There is no template for blocked-work follow-ups, sprint reminders, weekly summaries or Team Lead notifications; those bodies are composed from measured facts and sent through the generic email_draft tool."
   - "A draft cannot be edited. Any change means cancelling and creating a new draft, which needs its own confirmation."
   - "There is no read receipt, delivery status, reply tracking or scheduled send. The send log records recipients, subject, timestamp, draft id, confirmation flag and body fingerprint only."
   - "Message bodies are deliberately not stored after sending, so a sent email cannot be reproduced verbatim from the log."
   - "Azure DevOps holds no email address for some identities, and no address can be constructed or guessed for them."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - draft an email to the team
   - send a reminder about overdue work
@@ -90,7 +93,7 @@ Organization, project and team are fixed by configuration and are never passed.
 
 Every draft tool returns `{draftId, email: {to, cc, subject, body, contentType}, bodySha256, expiresAt, ...}` under a headline beginning `DRAFT ONLY - NOTHING HAS BEEN SENT.` Preserve that meaning in what you show the Team Lead.
 
-**Sending — the only non-read-only tool in the server:**
+**Sending — confirmation-gated; the other permitted write is saved-query creation via `create_ado_query`:**
 
 - `email_send_confirmed` (`draft_id`, `confirmation`, `expected_body_sha256`) — `confirmation` must be exactly `true`. It accepts no recipient, subject or body: it sends the stored draft byte for byte. `expected_body_sha256` is an optional integrity check against the `bodySha256` shown at draft time, and the send is refused if it no longer matches.
 
@@ -117,7 +120,7 @@ Every draft tool returns `{draftId, email: {to, cc, subject, body, contentType},
 
 The six numbered steps below are mandatory and may not be reordered, merged or skipped, whatever the Team Lead asks for.
 
-1. **Analyse the Azure DevOps data first and establish the facts.** Use the supporting tools for the workflow in hand — `ado_get_overdue_items`, `ado_get_blocked_items`, `analysis_deadlines`, `analysis_member_work`, `ado_get_sprint_progress` or `analysis_daily_team_review`. Never draft from memory or from an earlier turn in the conversation. If there is nothing to say — no overdue work, no blocked items — say so and do not draft an email.
+1. **Analyse the Azure DevOps data first and establish the facts.** Use the supporting tools for the workflow in hand — `ado_get_overdue_items`, `ado_get_blocked_items`, `analysis_deadlines`, `analysis_member_work`, `ado_get_sprint_progress` or `analysis_daily_team_review`. Never draft from memory or from an earlier turn in the conversation. If there is nothing to say — no overdue work, no blocked items — say so and do not draft an email. If a category (overdue, blocked, due this week) has count > 3, call `create_ado_query` and include the returned `savedQueryUrl` in the draft body as evidence, e.g. "Your current overdue work can be reviewed here: [Open Azure DevOps Query](url)". Follow `_shared/query-workflow.md`. Count <= 3: list the items in the email instead. Never invent a URL.
 2. **Identify the recipients from real team data.** Call `email_get_team_contacts` (or let a template resolve its own recipients) and use the addresses returned. Where the Team Lead typed an address, use exactly that. Never invent an address, never infer one from a name pattern, and never widen the list.
 3. **Create the draft.** Call the drafting tool for the workflow. Nothing is sent by this step. Record the `draftId`, `bodySha256` and `expiresAt` from the result.
 4. **Show the Team Lead the whole draft.** The full recipient list and any cc, the exact subject, the complete body verbatim with nothing summarised or truncated, the reason it is being proposed, the draft id, and the expiry time.
@@ -257,7 +260,7 @@ All of `_shared/safety-rules.md` applies, and section 5 of it governs this skill
 - **The send tool accepts no content**, so what was confirmed is necessarily what goes out. Never attempt to adjust a draft at send time; cancel and re-draft.
 - **Recipients come from real Azure DevOps identities** or from the Team Lead's own typing. No invented addresses, no `firstname.lastname@` patterns, no widening the list after confirmation.
 - **Never claim a send that did not happen.** Print the `EMAIL SENT` block only when `email_send_confirmed` returned success.
-- **Azure DevOps stays read-only.** An email can ask a person to change something; nothing here changes Azure DevOps.
+- **Azure DevOps work items stay read-only.** An email can ask a person to change something; nothing here changes a work item. Including a saved-query link from `create_ado_query` is allowed and must use the URL the tool returned.
 - **Assume the recipient reads it.** No blame, no speculation about why work is late, no risk ratings or judgements about people in anything that goes to the team.
 - **No credentials**, ever, in a draft body, a quoted error or a configuration explanation. `email_get_configuration` reports state without values.
 

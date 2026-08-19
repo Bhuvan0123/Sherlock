@@ -4,6 +4,7 @@ import { getConfig } from '../../../config/env.js';
 import { READ_ONLY_POST_ENDPOINTS, READ_ONLY_REFUSAL_MESSAGE } from '../../../security/read-only-policy.js';
 import { getAdoClient } from '../../../services/azure-devops/client.js';
 import { getProjectContext } from '../../../services/azure-devops/context.js';
+import { FieldMappingService } from '../../../services/azure-devops/field-mapping.js';
 import { getProjectService } from '../../../services/azure-devops/project.service.js';
 import { getSprintService } from '../../../services/azure-devops/sprint.service.js';
 import { getTeamService } from '../../../services/azure-devops/team.service.js';
@@ -240,6 +241,19 @@ export function registerAdoProjectTools(server: McpServer): void {
         handler: async args => {
             const result = getProjectContext().refresh((args.scope as 'all' | 'metadata' | 'work-items' | undefined) ?? 'all');
             return { ...result, note: 'Cache cleared. The next read fetches live data from Azure DevOps.' };
+        }
+    });
+
+    registerTool(server, {
+        name: 'ado_get_field_mapping',
+        title: 'Field Mapping',
+        description:
+            'Shows how Azure DevOps fields are mapped to canonical concepts like Planned Start, Planned End, Actual Start, and Actual End. Use this to understand which dates are actually available in the project.',
+        group: 'azure-devops',
+        audit: { category: 'project_review', action: 'Read field mappings' },
+        handler: async () => {
+            const svc = new FieldMappingService(getConfig().ado.project);
+            return await svc.getDiagnosticMapping();
         }
     });
 

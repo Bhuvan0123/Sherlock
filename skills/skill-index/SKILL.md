@@ -77,6 +77,12 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 
 | The Team Lead says | Route to |
 | --- | --- |
+| "Find backlog issues", "check backlog data quality", "deep backlog health analysis", "faults in the current backlog" | `backlog-data-quality` |
+| "When will we deliver?", "show delivery forecast" | `delivery-forecast` |
+| "What is blocking us?", "analyze dependencies" | `dependency-analysis` |
+| "Check hierarchy health" | `hierarchy-health-analysis` |
+| "Check schedule variance" | `schedule-variance-analysis` |
+| "Find stale work items" | `stale-work-analysis` |
 | "Give me today's team status" | `team-morning-brief` |
 | "Morning briefing", "what should I look at today" | `team-morning-brief` |
 | "Prepare my daily standup", "daily meet starter" | `daily-standup-starter` |
@@ -98,6 +104,12 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 | "Email the team a summary", "chase the blocked items" | `team-email-assistant` |
 | "Prepare my daily report" | `daily-team-report` |
 | "Give me last week's review" | `weekly-team-review` |
+| "Are dates updated?", "check backlog quality" | `backlog-data-quality` |
+| "Why are we delayed?", "check schedule variance" | `schedule-variance-analysis` |
+| "Are there orphaned tasks?", "check hierarchy health" | `hierarchy-health-analysis` |
+| "What is blocking what?", "check dependency impact" | `dependency-analysis` |
+| "What work is abandoned?", "check stale work" | `stale-work-analysis` |
+| "When will we finish?", "delivery forecast" | `delivery-forecast` |
 | "What happened this week?", "weekly project review" | `weekly-team-review` |
 
 **Choosing between neighbours.**
@@ -122,8 +134,9 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 | "Weekly review, and email it to the team" | `weekly-team-review` → `team-email-assistant` |
 | "Daily report plus suggestions for the unassigned items" | `daily-team-report` → `work-assignment-recommendation` |
 | "Project health, and where am I not following through?" | `project-health-analysis` → `tl-productivity-review` |
+| "Command-center view: brief, risks, load, blockers, backlog" | `team-morning-brief` → `deadline-risk-analysis` → `workload-analysis` → `dependency-analysis` → `backlog-data-quality` (reuse fetched data; one `create_ado_query` per unique category title) |
 
-When chaining, reuse what you already fetched rather than re-running the same tool, and never let a later skill contradict an earlier one — if two skills report the same count differently, say which tool produced which number and reconcile before answering.
+When chaining, reuse what you already fetched rather than re-running the same tool, and never let a later skill contradict an earlier one — if two skills report the same count differently, say which tool produced which number and reconcile before answering. Do not create duplicate saved queries for the same category in one chain; reuse the first `savedQueryUrl` / `existingQueryUrl`.
 
 **Confirmation survives every chain.** Reaching `team-email-assistant` through a chain never implies consent to send. The Team Lead approving "brief me and draft the reminders" has approved drafting, not sending. Each draft is still shown in full and confirmed individually.
 
@@ -162,6 +175,12 @@ Analysis
 - deadline-risk-analysis — <description>
 - project-health-analysis — <description>
 - sprint-health-analysis — <description>
+- backlog-data-quality — <description>
+- hierarchy-health-analysis — <description>
+- schedule-variance-analysis — <description>
+- dependency-analysis — <description>
+- stale-work-analysis — <description>
+- delivery-forecast — <description>
 - team-productivity-review — <description>
 - tl-productivity-review — <description>
 
@@ -171,7 +190,7 @@ Recommendation
 Communication
 - team-email-assistant — <description>
 
-Azure DevOps access is read-only. Email is drafted for review and sent only after explicit confirmation.
+Azure DevOps work items are read-only. Saved queries may be created via `create_ado_query` when a category has more than 3 items. Email is drafted for review and sent only after explicit confirmation.
 ```
 
 ## Edge Cases

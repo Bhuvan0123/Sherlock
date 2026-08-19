@@ -2,7 +2,7 @@
 name: tl-productivity-review
 title: Team Lead Productivity Review
 description: Review the Team Lead's own project-management activity using the local audit trail of actions taken through this assistant, combined with live Azure DevOps state, to show what is being monitored, where follow-through has stalled and which risks are still standing.
-version: 1.0.0
+version: 2.0.0
 category: analysis
 mutates_azure_devops: false
 requires_confirmation: false
@@ -20,11 +20,15 @@ supporting_tools:
   - ado_get_unassigned_items
   - email_get_send_log
   - email_list_drafts
+  - ado_get_overdue_items
+  - ado_query_work_items
+  - create_ado_query
 missing_capabilities:
   - "The audit trail records only actions taken through this MCP server. Work done directly in the Azure DevOps web UI, in meetings, in Teams chat or by email outside this assistant is invisible to every tool here."
   - "There is no measure of time spent, decisions made or conversations held, so nothing about management effort or diligence can be derived."
   - "Azure DevOps does not attribute a field change to the person who prompted it, so a follow-up that worked cannot be linked back to the Team Lead's action."
   - "There is no benchmark or peer comparison for a Team Lead, and the server produces no management score of any kind."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - review my own activity
   - how am i managing the team
@@ -113,6 +117,7 @@ The audit trail stores a redacted parameter and result summary only. It never st
 9. **Assemble the output** in the order below, with `Observed data` and `AI interpretation` visibly separated in every section that contains both.
 10. **State the trail's limitation explicitly**, in the header and again beside any finding that depends on activity counts.
 11. **Close with the read-only statement.**
+12. **Create queries** via `create_ado_query` for underlying work-item groups with count > 3 (unassigned high-priority, long-blocked, overdue still open after repeated review) following `_shared/query-workflow.md`. Do not make unsupported claims about management quality.
 
 If `tl_analyze_productivity` fails, run `tl_analyze_activity` and `tl_get_activity_summary` instead, and say plainly that the live-state correlation is missing from this run.
 
@@ -150,13 +155,13 @@ Use the templates from `_shared/templates/` to construct the response.
 4. **🔎 Key Findings & 🚨 Risks**: 
    - `MANAGEMENT SIGNALS` (Observed data only, e.g., an item reviewed X times but still open).
    - Unassigned priority items or long-blocked items.
-5. **🧠 AI Analysis (Areas for Improvement)**: 
-   Identify gaps in follow-through or coverage (e.g. drafts that expired). Keep interpretation distinct from observed facts.
-6. **💡 Recommended Actions**: Actionable items to close the gaps (e.g., assign unowned work, send draft).
-7. **⚠️ Data Quality**: 
-   Reiterate the limitations of the audit trail (work outside the assistant is invisible).
+5. **🧠 Management Insights**: Interpretation of coverage and follow-through, labelled as interpretation, with trail limitation restated.
+6. **💡 Improvement Recommendations**: Coverage and follow-through actions, not character judgements.
+7. **🎯 TL Actions**: Today / This Week.
+8. **🔎 Azure DevOps Queries** for work-item groups with count > 3.
+9. **⚠️ Data Quality**: Reiterate the audit-trail limitation.
 
-Ensure you state: "No Azure DevOps changes were made. KaarPulse is read-only for Azure DevOps."
+Ensure you state: "No Azure DevOps work items were modified."
 
 ## Edge Cases
 
@@ -183,7 +188,7 @@ All of `_shared/safety-rules.md` applies. The points that bite hardest here:
 - **The trail's blind spot must be stated, not buried.** It appears in the header and again next to any finding that rests on activity counts. Silently letting a low count read as inactivity is the primary failure mode of this skill.
 - **No inference from missing data, and no personal claims.** Nothing about attitude, effort, diligence or capability, for the Team Lead or for any team member named in the risks.
 - **No invented data.** Every count, date, id and state comes from a tool call made during this request. Unknown is not zero.
-- **Read-only.** Every recommendation here is text. Reassigning that unowned priority-1 item, unblocking an item or rebalancing a load all happen in Azure DevOps, by a human.
+- **Read-only for work items.** Every recommendation here is text. Reassigning that unowned priority-1 item, unblocking an item or rebalancing a load all happen in Azure DevOps, by a human. Saved queries via `create_ado_query` are allowed.
 - **Respect the audit trail.** Do not work around it, and do not call `tl_purge_activity` on your own initiative.
 - **No credentials**, ever, including in quoted error messages. The trail is redacted by design; keep it that way in the output.
 

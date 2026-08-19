@@ -27,3 +27,4 @@ coverage/
 .vitest/
 .DS_Store
 Thumbs.db
+.env

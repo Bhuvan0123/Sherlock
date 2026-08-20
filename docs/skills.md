@@ -1,91 +1,74 @@
 # Skills
 
-Built-in skills cover standup, morning brief, project health, sprint health, workload, deadlines, dependencies, backlog quality, stale work, delivery forecast, productivity review, weekly review and assignment recommendations.
+Built-in skills are markdown playbooks in `skills/<name>/SKILL.md` plus executable definitions in `InternalSkillRegistry`. Recurring workflows should go through `skill_execute` rather than long `ado_*` chains.
 
-Each skill supports `brief`, `verbose` and `visual` modes where applicable. Skills use modules, recommendations, navigation links and controlled query creation when the result set is large enough.
+Playbooks load locally. They do not call Azure DevOps until a skill is executed.
+
+## Modes
+
+`skill_execute` supports:
+
+| Mode | Audience | Shape |
+| --- | --- | --- |
+| `brief` | Fast decision | KPI table, at most 3 findings, at most 3 recommendations, important query links |
+| `verbose` | Investigation | Module evidence, items when count ≤ 3, queries when > 3, assumptions |
+| `visual` | Dashboard | Tables, severity marks, navigation links |
+
+Severity: 🔴 critical · 🟠 attention · 🟡 watch · 🟢 healthy · 🔵 information.
 
 Examples:
 
 ```text
-/daily-standup-starter brief
-/daily-standup-starter visual
-/workload-analysis brief
-/project-health-analysis visual
+Execute skill daily-standup-starter in brief mode
+Execute skill daily-standup-starter in visual mode
+Execute skill workload-analysis in brief mode
+Execute skill project-health-analysis in visual mode
 ```
 
-Saved-query behavior: S.H.E.R.L.O.C.K. stores generated/reused Azure DevOps queries under `My Queries/{ADO_TEAM}` and reuses matching queries only inside that configured team folder.
-# Skills
+## Count > 3 and queries
 
-KaarPulse skills are markdown workflows in `skills/<name>/SKILL.md`. They tell the Team Lead assistant **how** to use existing MCP tools. Loading a skill contacts nothing.
+When a category has more than three items, S.H.E.R.L.O.C.K. creates or reuses **one** saved query in `My Queries/{ADO_TEAM}` and returns the real URL. Count ≤ 3 lists items. Count 0 reports empty; no empty query.
 
-## Decision-support pipeline
+Azure DevOps saved queries created by S.H.E.R.L.O.C.K. are automatically organized by the configured team under `My Queries/{Team Name}`. This keeps queries isolated and manageable when the same project contains multiple teams.
 
-Every major skill follows `_shared/query-workflow.md`:
+Reuse is team-scoped. Titles stay readable (`Overdue Work`), not `Platform - Overdue Work`.
 
-FETCH → ANALYSE → GROUP → COUNT → IDENTIFY SIGNIFICANT CATEGORIES → CREATE ADO QUERY → RETURN QUERY URL → VISUALIZE → EXPLAIN INSIGHTS → RECOMMEND ACTIONS → SUPPORT TL DECISION
+Work items stay read-only. Query creation is the controlled exception.
 
-The response is a dashboard, not a dump of work items.
+## Built-in catalogue
 
-## Count > 3 rule
+| Skill | Purpose | Typical modules | Queries | Navigation |
+| --- | --- | --- | --- | --- |
+| `daily-standup-starter` | Per-member open/active work for standup | review | when groups > 3 | work-item / query URLs |
+| `team-morning-brief` | Morning triage: load, deadlines, blockers | review, workload, deadline | yes | yes |
+| `daily-team-report` | Keepable daily dashboard | review, sprint, workload | yes | yes |
+| `weekly-team-review` | Weekly planned vs actual and next actions | review, sprint, workload | yes | yes |
+| `project-health-analysis` | Executive health across sprint, load, risk, backlog, deps | sprint, workload, deadline, risk, backlog, dependency | yes | yes |
+| `sprint-health-analysis` | Current sprint vs progress / carry-over signals | sprint | yes | sprint + query URLs |
+| `workload-analysis` | Distribution and capacity signals (not a ranking) | workload, team-capacity, deadline | yes | yes |
+| `deadline-risk-analysis` | Overdue / due soon / missing dates | deadline, risk | yes | yes |
+| `dependency-analysis` | Blocked work and chains | dependency | yes | yes |
+| `backlog-data-quality` | Hierarchy, fields, dates, ownership, stale, etc. | backlog, date, hierarchy, stale-work | one query per large category | yes |
+| `hierarchy-health-analysis` | Epic/feature/story linking gaps | backlog, hierarchy | yes | yes |
+| `schedule-variance-analysis` | Planned vs actual date completeness | backlog, date | yes | yes |
+| `stale-work-analysis` | Open work with no recent change | stale-work | yes | yes |
+| `delivery-forecast` | Throughput-based outlook when history exists | delivery-forecast | usually off | usually off |
+| `team-productivity-review` | Team throughput and load | productivity, workload | yes | yes |
+| `tl-productivity-review` | Coverage/follow-through from local audit + ADO | productivity, workload, deadline, review | optional | yes |
+| `work-assignment-recommendation` | Who *could* take an item — never assigns | assignment | as needed | work-item URLs |
+| `skill-index` | Router / catalogue | (router) | no | no |
 
-When a skill identifies a **category** (a meaningful group sharing one condition):
+Recommendations are advisory. Token strategy: shared aggregator, compact DTOs, query links instead of dumping large item lists.
 
-| Count | Behaviour |
-| --- | --- |
-| `> 3` | Create or reuse one saved Azure DevOps query via `create_ado_query`. Show Title, Description, Count and the real Navigate link. |
-| `<= 3` | List the items directly. Do not create a saved query unless the category is strategically important. |
-| `0` | Report that nothing matched. Do not create an empty query. |
+## Programmatic vs conversational
 
-Do not create a query per work item or per team member unless asked.
+- Conversational: “How is my team doing?” → `skill_execute` `daily-standup-starter` or `team-morning-brief`
+- Programmatic: MCP tool `skill_execute` with name + mode
 
-## Central query creation
-
-Skills must not invent their own query writer. Path:
-
-Skill → analysis → query definition (WIQL + fields) → `create_ado_query` → saved query + URL → response table
-
-Field names come from `ado_get_field_mapping` / the live process. See [query-engine.md](query-engine.md) and [query-fields.md](query-fields.md).
-
-## Query reuse
-
-There is **no** saved-query list/discovery tool. Reuse is by predictable title (`Platform - Overdue Work`). If `create_ado_query` returns `QUERY_ALREADY_EXISTS`, use `existingQueryUrl` / `savedQueryUrl` and `resultCount`. Do not create timestamped duplicates.
-
-## Skill integration
-
-Compound requests chain analysis first, then reporting, then email. Example:
-
-`team-morning-brief` → `deadline-risk-analysis` → `workload-analysis` → `dependency-analysis` → `backlog-data-quality` → query creation → combined dashboard
-
-Reuse fetched data. One saved query per unique title in a chain.
-
-## Visual response
-
-Skills use `_shared/output-format.md`: KPI tables, status indicators, progress/workload bars (only from measured values), Insights, Recommendations (what / why / impact / when / evidence), TL Decision Support, and Today / This Week / Optional actions.
-
-## Recommendation framework
-
-Each recommendation answers what the TL should do, why, expected impact, and when. Evidence should be a real query link when a query exists. KaarPulse does not apply work-item changes.
-
-## Response modes (`skill_execute`)
-
-Every analysis skill supports **brief**, **verbose** and **visual**. These are different layouts, not three copies of the same text.
-
-| Mode | Audience | Structure |
-| --- | --- | --- |
-| brief | Fast TL decision | KPI table, at most 3 findings, at most 3 recommendations, important query links |
-| verbose | Investigation | Summary KPIs, evidence, items when count ≤ 3, queries when > 3, assumptions |
-| visual | Dashboard scan | KPI and findings tables, severity marks, navigation links |
-
-Severity marks: 🔴 critical · 🟠 attention · 🟡 watch · 🟢 healthy · 🔵 information.
-
-Work items stay read-only. Query names use the configured **team** name (not a hard-coded Platform prefix).
-
-## Programmatic execution
-
-Built-in and custom skills also run through `skill_execute` (modes: brief, verbose, visual). That path uses the shared data aggregator so a composed skill does not multiply Azure DevOps calls by the number of source skills.
-
-Compound **saved** skills should be composed once (`kaarflow_compose_skill`) rather than chaining four separate `skill_execute` calls for the same briefing.
+Compound **saved** workflows should be composed once (`kaarflow_compose_skill`) instead of four separate executes. See [CUSTOM-SKILLS.md](CUSTOM-SKILLS.md).
 
 ## Safety
 
-Azure DevOps **work items** remain read-only. Creating a saved query is allowed. Email still requires explicit per-draft confirmation.
+- No skill may mutate Azure DevOps work items
+- `create_ado_query` is allowed
+- V1 has no email skill

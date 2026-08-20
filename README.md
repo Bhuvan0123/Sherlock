@@ -1,44 +1,119 @@
 # S.H.E.R.L.O.C.K.
 
-Sprint Health, Execution, Risk, Logistics, Operations & Coordination Knowledge
+**Sprint Health, Execution, Risk, Logistics, Operations & Coordination Knowledge**
 
-## What Is S.H.E.R.L.O.C.K.?
+Local MCP server for Azure DevOps team intelligence: sprint health, workload, deadline risk, backlog quality, recommendations, custom skills, and **controlled saved-query creation**. Work items stay read-only.
 
-S.H.E.R.L.O.C.K. is an MCP server for Azure DevOps team intelligence. It reads the configured organization, project and team, runs sprint/backlog/workload/risk analysis, creates recommendations, and can create or reuse controlled Azure DevOps saved queries for evidence.
+This README is the map. The detailed guides live in [`docs/`](docs/README.md).
 
-## Key Features
+| You want to… | Open |
+| --- | --- |
+| Clone, Node, `.env`, PAT, first build | [docs/INSTALLATION.md](docs/INSTALLATION.md) |
+| Connect **Claude Desktop, Claude Code, Claude CLI, Cursor, Kiro, Inspector** | [docs/MCP-CLIENTS.md](docs/MCP-CLIENTS.md) |
+| Environment variables, team switching, query folders | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
+| Layers, diagrams, query engine, SQLite | [docs/architecture.md](docs/architecture.md) |
+| Built-in skills and modes | [docs/skills.md](docs/skills.md) |
+| Create / compose custom skills | [docs/custom-skills.md](docs/custom-skills.md) |
+| PAT, read-only policy, what V1 will not do | [docs/SECURITY.md](docs/SECURITY.md) |
+| Doctor, MCP missing, ADO errors | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| Develop and open a PR | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) |
+| What changed in V1 | [CHANGELOG.md](CHANGELOG.md) |
 
-- Azure DevOps sprint, backlog, deadline, dependency, workload and project-health analysis.
-- Built-in skills plus persisted custom skills with `brief`, `verbose` and `visual` modes.
-- Azure DevOps work-item read-only security with controlled saved-query creation.
-- Team-scoped saved queries under `My Queries/{ADO_TEAM}`.
-- Local SQLite persistence for audit activity and custom skills.
-- Health check and `npm run doctor` diagnostics.
+---
 
-## Architecture
+## 1. What is S.H.E.R.L.O.C.K.?
 
-MCP clients call the MCP tool layer, which routes into the Skill Executor, Analysis Module Registry, Data Aggregator, Cache Manager, Query Engine, Navigation Engine, Recommendation Engine and Azure DevOps layer. See `docs/ARCHITECTURE.md`.
+S.H.E.R.L.O.C.K. runs on your machine as `node dist/index.js`. Claude, Cursor, or Kiro start that process and call MCP tools. The server reads **your** Azure DevOps organization, project, and team from `.env`, analyses live work items, and can create saved queries under `My Queries/{ADO_TEAM}`.
 
-## Requirements
+It is not a website, not a hosted API, and not a work-item editor.
 
-- Node.js 22.5 or newer.
-- An Azure DevOps organization, project and team.
-- An Azure DevOps PAT with the minimum read/query permissions needed by your enabled workflows.
+## 2. Key features
 
-## Installation
+- Sprint, backlog, deadline, dependency, workload, and project-health analysis
+- Built-in skills plus SQLite-backed custom skills (`brief` / `verbose` / `visual`)
+- Work-item **read-only** security with **controlled** saved-query create/reuse
+- Team-scoped queries: `ADO_TEAM=Development` → `My Queries/Development/`
+- Dynamic Azure DevOps URLs from configuration (no hardcoded org/project)
+- `sherlock_health_check` and `npm run doctor`
+- Redacted logs and tool responses (PAT never printed)
 
-```bash
-npm install
-cp .env.example .env
-npm run doctor
-npm run build
+## 3. Architecture
+
+```mermaid
+flowchart TB
+  subgraph clients [MCP clients]
+    CD[Claude Desktop]
+    CC[Claude Code / CLI]
+    CU[Cursor]
+    KI[Kiro]
+  end
+  subgraph sherlock [S.H.E.R.L.O.C.K.]
+    T[MCP tool layer]
+    E[Skill Executor]
+    A[Analysis modules + aggregator + cache]
+    Q[Query + navigation + recommendations]
+    D[Azure DevOps layer]
+    S[(SQLite data/)]
+  end
+  ADO[Azure DevOps REST / WIQL]
+  clients --> T --> E --> A --> D --> ADO
+  E --> Q
+  E --> S
 ```
 
-On Windows PowerShell, use `Copy-Item .env.example .env`.
+```text
+Claude / Cursor / Kiro
+        ↓
+       MCP (stdio)
+        ↓
+MCP Tool Layer
+        ↓
+Skill Executor
+        ↓
+Analysis Module Registry
+        ↓
+Data Aggregator + Cache
+        ↓
+Azure DevOps Layer
+        ↓
+Azure DevOps REST API / WIQL
+        + My Queries/{ADO_TEAM}
+```
 
-## Configuration
+Full diagrams and component notes: [docs/architecture.md](docs/architecture.md).
 
-Edit `.env`:
+## 4. Requirements
+
+- Node.js **≥ 22.5.0**
+- npm
+- Git
+- An Azure DevOps organization, project, and team
+- A PAT (read; plus query write if you want saved queries)
+
+## 5. Installation
+
+Short path (every step is expanded in [docs/INSTALLATION.md](docs/INSTALLATION.md)):
+
+```bash
+git clone <your-repo-url> sherlock
+cd sherlock
+npm install
+cp .env.example .env
+```
+
+Windows PowerShell: `Copy-Item .env.example .env`
+
+Edit `.env` with **your** org, project, team, and PAT. Then:
+
+```bash
+npm run doctor
+npm run build
+npm test
+```
+
+Then connect a client: [docs/MCP-CLIENTS.md](docs/MCP-CLIENTS.md).
+
+## 6. Configuration
 
 ```env
 ADO_ORGANIZATION=your_organization
@@ -50,20 +125,51 @@ LOG_LEVEL=info
 TOKEN_DEBUG=false
 ```
 
-The sample values in `.env.example` are examples only. Runtime source code does not hardcode an organization, project or team.
+Required values are validated at startup. Examples in `.env.example` (`KEBS4KAAR` / `K4K` / `Platform`) are samples only.
 
-## Azure DevOps PAT
+Team isolation of saved queries is documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-Never commit `.env` or paste a PAT into chat, docs, query names or tool inputs. S.H.E.R.L.O.C.K. masks known credentials in logs and tool responses and never stores the PAT in SQLite.
+## 7. Azure DevOps PAT
 
-## Running The MCP
+Create a PAT in Azure DevOps → User settings → Personal access tokens.
+
+Minimum for analysis: **Work Items (Read)** and **Project and Team (Read)**. Saved queries need permission to create queries under **My Queries**.
+
+Never commit `.env`. Never put the PAT in README, issues, or query titles. Health check reports “PAT configured”, not the secret. Details: [docs/SECURITY.md](docs/SECURITY.md).
+
+## 8. Running the MCP
 
 ```bash
 npm run build
 npm run start
 ```
 
-## Claude Code Setup
+`npm run start` waits on stdin (stdio). MCP clients start this process for you; you usually do not leave `start` running yourself.
+
+| Script | Purpose |
+| --- | --- |
+| `npm run build` | Compile TypeScript → `dist/index.js` |
+| `npm run start` | Run the compiled MCP server |
+| `npm run doctor` | Installation / config / ADO diagnostics |
+| `npm test` | Unit tests (mocked ADO) |
+| `npm run inspector` | MCP Inspector |
+
+## 9–13. MCP clients (summary)
+
+Full copy-paste configs, file paths, restart rules, and verification prompts:
+
+**[docs/MCP-CLIENTS.md](docs/MCP-CLIENTS.md)**
+
+| Client | Config | Add server |
+| --- | --- | --- |
+| **Claude Desktop** | `claude_desktop_config.json` | Settings → Developer → Edit Config |
+| **Claude Code** | `.mcp.json` or `~/.claude.json` | `claude mcp add --transport stdio …` |
+| **Claude CLI** | same as Claude Code | `claude mcp add` then `claude` / `/mcp` |
+| **Cursor** | `.cursor/mcp.json` or `~/.cursor/mcp.json` | Settings → Tools & MCP |
+| **Kiro** | `.kiro/settings/mcp.json` | Command Palette → Open MCP config |
+| **Inspector** | `mcp-inspector.config.json` | `npm run inspector` |
+
+Shared JSON shape (replace the path):
 
 ```json
 {
@@ -76,59 +182,53 @@ npm run start
 }
 ```
 
-## Claude Desktop Setup
+Windows: use `C:\\Users\\you\\src\\sherlock\\dist\\index.js` (escaped backslashes) or forward slashes. Prefer an absolute path to `node.exe` if the GUI cannot see `node` on PATH.
 
-Add the same `mcpServers.sherlock` block to your Claude Desktop MCP configuration file, using an absolute path to `dist/index.js`.
+## 14. Available skills
 
-## Cursor Setup
+Standup, morning brief, sprint health, project health, workload, deadlines, dependencies, backlog quality, stale work, delivery forecast, weekly review, assignment recommendations, and more.
 
-Add the same server block to your Cursor MCP configuration, or run from this repository with `npm run inspector` for local validation.
+Modes: `brief`, `verbose`, `visual`.
 
-## Kiro Setup
+Catalogue: [docs/skills.md](docs/skills.md) and [skills/README.md](skills/README.md).
 
-Configure an MCP server named `sherlock` with command `node` and args pointing to `/absolute/path/to/sherlock/dist/index.js`.
+## 15. Custom skills
 
-## MCP Inspector
+Preview → confirm → save → execute. Compose existing skills into one module-union skill. Persist in SQLite.
+
+[docs/custom-skills.md](docs/custom-skills.md)
+
+## 16. Security model
+
+S.H.E.R.L.O.C.K. v1 does **not** create, update, delete, assign, or field-edit work items.
+
+It **can** read ADO, run WIQL, create/reuse saved queries under `My Queries/{ADO_TEAM}`, analyse, recommend, and manage local custom skills.
+
+[docs/SECURITY.md](docs/SECURITY.md)
+
+## 17. Troubleshooting
 
 ```bash
-npm run build
-npm run inspector
+npm run doctor
 ```
 
-Verify `sherlock_health_check`, `skill_execute`, custom skill tools, ADO reads and `create_ado_query`.
+Then [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-## Available Skills
-
-Core skills include `daily-standup-starter`, `team-morning-brief`, `sprint-health-analysis`, `project-health-analysis`, `workload-analysis`, `deadline-risk-analysis`, `dependency-analysis`, `backlog-data-quality`, `stale-work-analysis`, `delivery-forecast`, `weekly-team-review` and `work-assignment-recommendation`.
-
-## Custom Skills
-
-Use the custom skill tools to create, preview, confirm, save, list, update, duplicate, enable, disable, remove, compose and execute custom skills. Custom skills remain organization/project/team independent and support `brief`, `verbose` and `visual`.
-
-## Security Model
-
-S.H.E.R.L.O.C.K. v1 does not create, update, delete, assign or modify Azure DevOps work items. It can read Azure DevOps data, execute WIQL, create/reuse controlled saved queries, perform analysis, create recommendations and manage local custom skills.
-
-Generated saved queries are stored under `My Queries/{ADO_TEAM}`. Changing `ADO_TEAM=Development` stores/reuses queries under `My Queries/Development`.
-
-## Troubleshooting
-
-Run `npm run doctor` first. Common issues are missing PAT, invalid PAT, inaccessible organization/project, team not found, stale MCP process, unrebuilt `dist`, SQLite path problems and MCP Inspector config mistakes.
-
-## Development
+## 18. Development
 
 ```bash
 npm run build
-npm run test
 npx vitest run
 ```
 
-Live Azure DevOps verification should be opt-in and must not be required in CI.
+Live ADO checks are opt-in (`npm run verify:live`) and **not** required for public CI. [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 
-## Roadmap
+## 19. Roadmap
 
-V1 is focused on Azure DevOps, team/sprint intelligence, read-only work-item analysis, controlled query creation, custom skills and MCP. Email and additional platform adapters may be considered for a future V2.
+V1: Azure DevOps + team/sprint intelligence + read-only work items + controlled queries + custom skills + MCP.
 
-## License
+Possible V2 (not implemented): email, extra platform adapters, scheduling.
 
-No license file is currently included. A license decision is required before public distribution.
+## 20. License
+
+No `LICENSE` file is in this repository yet. A license decision is required before public distribution. Do not assume MIT or proprietary terms.

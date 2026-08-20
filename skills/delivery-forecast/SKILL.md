@@ -16,7 +16,7 @@ supporting_tools:
   - ado_get_overdue_items
   - ado_get_field_mapping
   - ado_query_work_items
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "This server exposes no burndown series and no official velocity field. A numeric finish date is only possible when historical completion and estimates both exist; otherwise the forecast is unavailable, not guessed."
   - "There is no saved-query discovery tool. Reuse happens only via QUERY_ALREADY_EXISTS."
@@ -54,7 +54,7 @@ None. Optional sprint reference — pass through to `ado_get_sprint_progress`. D
 - `ado_get_sprint_progress` — remaining items, points, days remaining, completionRate.
 - `analysis_blocked_items`, `ado_get_overdue_items` — risk that invalidates a pace assumption.
 - `ado_get_field_mapping` — whether planned end exists for remaining work.
-- `create_ado_query` — risk groups with count > 3.
+- `ado_query_work_items` — risk groups with count > 3.
 
 ## Workflow
 
@@ -63,7 +63,7 @@ None. Optional sprint reference — pass through to `ado_get_sprint_progress`. D
 3. **Call `analysis_schedule_variance`, `analysis_blocked_items`, `ado_get_overdue_items`.** These are forecast-risk inputs, not a second forecast.
 4. **Decide forecast availability.** Produce a numeric outlook only when all of these are true and you state them: remaining work counted; days remaining known; at least two completed sprints of history; estimates present on enough remaining items that you can say how many were excluded. If any fail, **explain why the forecast is unavailable** and give the measured position instead (items left, days left, blocked, overdue).
 5. **If a forecast is produced**, describe it as an extrapolation of measured throughput, not a commitment. No percentages of "chance to finish".
-6. **Risk groups:** overdue remaining work; blocked remaining work; missing planned end on active work; high completion variance. Count > 3 → `create_ado_query` (`Platform - Overdue Work`, `Platform - Blocked Work`, `Platform - Missing Planned End Dates`). Reuse titles. Follow `_shared/query-workflow.md`.
+6. **Risk groups:** overdue remaining work; blocked remaining work; missing planned end on active work; high completion variance. Count > 3 → `ado_query_work_items` (`Platform - Overdue Work`, `Platform - Blocked Work`, `Platform - Missing Planned End Dates`). Reuse titles. Follow `_shared/query-workflow.md`.
 7. Close with actions that would make a later forecast possible (complete planned dates, unblock). No work items are modified.
 
 ## Analysis Rules
@@ -75,6 +75,9 @@ Throughput may be stated as "N items completed in D days" from `analysis_team_de
 Missing planned dates reduce forecast reliability — say what share of remaining work lacks them when both numbers exist.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow `_shared/output-format.md`.
 
@@ -100,7 +103,7 @@ Follow `_shared/output-format.md`.
 
 ## Safety Rules
 
-All of `_shared/safety-rules.md` applies. No fabricated forecasts. Work items read-only. `create_ado_query` is the only Azure DevOps write. Never invent query URLs.
+All of `_shared/safety-rules.md` applies. No fabricated forecasts. Work items read-only. `ado_query_work_items` is the only Azure DevOps write. Never invent query URLs.
 
 ## Example Requests
 

@@ -27,13 +27,13 @@ supporting_tools:
   - analysis_schedule_variance
   - ado_get_field_mapping
   - ado_query_work_items
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Azure DevOps exposes no budget, cost or resource-plan data, so financial health cannot be assessed."
   - "There is no project-level quality signal here - build results, test results, code coverage and pull requests are outside this server's read scope."
   - "Hierarchy quality has no aggregate query, so orphaned and parentless work can only be sampled item by item, never counted across the whole backlog."
   - "There is no recorded project baseline or original plan, so scope growth against a plan cannot be measured, only carry-over and mid-sprint additions."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - how healthy is the project
   - project health check
@@ -114,7 +114,7 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 10. **Map the server's dimension ratings** onto the five named dimensions using the mapping below, and derive the overall from `facts.health.overall`. State once that the mapping is this skill's presentation of the server's ratings.
 11. **Attach reasoning to every score** from the tool's `reasons[]`, adding the measured counts behind each. A dimension printed without reasons is a defect.
 12. **Assemble the report** in the order given in Output Format, then close with the read-only statement.
-13. **Create queries for significant problem groups** (count > 3) via `create_ado_query` — overdue, blocked, unassigned, missing planned dates, stale, hierarchy orphans — following `_shared/query-workflow.md`. Reuse data already fetched. The health table must explain **why** each dimension has that status (evidence), not only a colour.
+13. **Create queries for significant problem groups** (count > 3) via `ado_query_work_items` — overdue, blocked, unassigned, missing planned dates, stale, hierarchy orphans — following `_shared/query-workflow.md`. Reuse data already fetched. The health table must explain **why** each dimension has that status (evidence), not only a colour.
 
 If `analysis_project_health` fails, build what you can from `ado_get_project_overview`, `analysis_team_workload`, `analysis_deadlines` and `analysis_blocked_items`, report the measured counts without ratings, and say the health ratings are unavailable rather than inventing them.
 
@@ -142,6 +142,9 @@ Where a named dimension draws on more than one server dimension, take the worst 
 
 ## Output Format
 
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
+
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
 
@@ -159,7 +162,7 @@ Use the templates from `_shared/templates/` to construct the response.
    | Data Quality | | |
    | Sprint | | |
 4. **🚨 What Needs Attention** — top problem groups with counts.
-5. **🔎 Azure DevOps Queries** — real `create_ado_query` links for groups with count > 3.
+5. **🔎 Azure DevOps Queries** — real `ado_query_work_items` links for groups with count > 3.
 6. **🧠 Insights** — why the project has this status (patterns, not a repeat of the score).
 7. **💡 Recommendations**, **🧭 TL Decision Support**, **🎯 Actions**.
 8. Footer: **ADO Work Items Modified: No**.
@@ -186,7 +189,7 @@ Use the templates from `_shared/templates/` to construct the response.
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only for work items.** A health report invites action. None of it happens here; every run ends stating no work items were modified. Saved queries via `create_ado_query` are allowed.
+- **Read-only for work items.** A health report invites action. None of it happens here; every run ends stating no work items were modified. Saved queries via `ado_query_work_items` are allowed.
 - **Ratings are the server's, presentation is this skill's.** Never present the five-dimension view as though Azure DevOps produced those names, and never present a mapped rating as a fresh measurement.
 - **Sampled is not counted.** Hierarchy and staleness findings always carry their sample size; extrapolating a sample to the backlog would be fabrication. Counts, ratings, reasons and dates all come from tool calls made in this run, and unknown is not zero.
 - **No performance judgements.** Resource Health describes distribution of work, never the capability of the people holding it. Assume the report could be forwarded to the whole team.

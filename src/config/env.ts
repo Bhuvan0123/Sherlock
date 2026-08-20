@@ -34,23 +34,18 @@ const nonEmpty = (label: string) =>
         .min(1, `${label} must not be empty`);
 
 const envSchema = z.object({
-    ADO_ORGANIZATION: nonEmpty('ADO_ORGANIZATION').default('KEBS4KAAR'),
-    ADO_PROJECT: nonEmpty('ADO_PROJECT').default('K4K'),
-    ADO_TEAM: nonEmpty('ADO_TEAM').default('Platform'),
-    ADO_PAT: z.string().trim().default(''),
+    ADO_ORGANIZATION: nonEmpty('ADO_ORGANIZATION'),
+    ADO_PROJECT: nonEmpty('ADO_PROJECT'),
+    ADO_TEAM: nonEmpty('ADO_TEAM'),
+    ADO_PAT: nonEmpty('ADO_PAT'),
     ADO_API_VERSION: nonEmpty('ADO_API_VERSION').default('7.1'),
+    SHERLOCK_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    TOKEN_DEBUG: z.enum(['true', 'false']).default('false').transform(val => val === 'true'),
 
-    MICROSOFT_TENANT_ID: z.string().trim().default(''),
-    MICROSOFT_CLIENT_ID: z.string().trim().default(''),
-    MICROSOFT_CLIENT_SECRET: z.string().trim().default(''),
-    EMAIL_SENDER: z.string().trim().default(''),
-    EMAIL_ALLOWED_RECIPIENTS: z.string().trim().default(''),
-
-    DATABASE_URL: nonEmpty('DATABASE_URL').default('file:./data/k4k-tl.sqlite'),
+    DATABASE_URL: nonEmpty('DATABASE_URL').default('file:./data/sherlock.sqlite'),
 
     LOG_LEVEL: z.enum(['silent', 'error', 'warn', 'info', 'debug']).default('info'),
-    CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300),
-    EMAIL_DRAFT_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60)
+    CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300)
 });
 
 export interface AppConfig {
@@ -63,17 +58,10 @@ export interface AppConfig {
         baseUrl: string;
         /** True when a PAT is present; ADO tools report a clear setup error when false. */
         configured: boolean;
+        /** Enables detailed telemetry for API token usage. */
+        tokenDebug: boolean;
     };
-    email: {
-        tenantId: string;
-        clientId: string;
-        clientSecret: string;
-        sender: string;
-        allowedRecipients: string[];
-        draftTtlMinutes: number;
-        /** True when Graph credentials + sender are all present. */
-        configured: boolean;
-    };
+    sherlockEnv: 'development' | 'test' | 'production';
     database: {
         /** Absolute file path, or ':memory:'. */
         path: string;
@@ -100,13 +88,6 @@ function resolveDatabasePath(raw: string): string {
     return isAbsolute(filePath) ? filePath : resolve(PROJECT_ROOT, filePath);
 }
 
-function parseRecipientAllowlist(raw: string): string[] {
-    return raw
-        .split(',')
-        .map(entry => entry.trim().toLowerCase())
-        .filter(entry => entry.length > 0);
-}
-
 let cachedConfig: AppConfig | null = null;
 
 /** Builds the validated application config. Values are read once and memoised. */
@@ -119,7 +100,7 @@ export function getConfig(): AppConfig {
         const details = parsed.error.issues
             .map(issue => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
             .join('\n');
-        throw new Error(`Invalid environment configuration:\n${details}`);
+        throw new Error(`S.H.E.R.L.O.C.K. configuration error:\n\n${details}\n\nCreate a .env file from .env.example and provide your Azure DevOps settings. Never print or share ADO_PAT.`);
     }
     const env = parsed.data;
 
@@ -132,21 +113,10 @@ export function getConfig(): AppConfig {
             pat: env.ADO_PAT,
             apiVersion: env.ADO_API_VERSION,
             baseUrl: `https://dev.azure.com/${encodeURIComponent(organization)}`,
-            configured: env.ADO_PAT.length > 0
+            configured: true,
+            tokenDebug: env.TOKEN_DEBUG
         },
-        email: {
-            tenantId: env.MICROSOFT_TENANT_ID,
-            clientId: env.MICROSOFT_CLIENT_ID,
-            clientSecret: env.MICROSOFT_CLIENT_SECRET,
-            sender: env.EMAIL_SENDER,
-            allowedRecipients: parseRecipientAllowlist(env.EMAIL_ALLOWED_RECIPIENTS),
-            draftTtlMinutes: env.EMAIL_DRAFT_TTL_MINUTES,
-            configured:
-                env.MICROSOFT_TENANT_ID.length > 0 &&
-                env.MICROSOFT_CLIENT_ID.length > 0 &&
-                env.MICROSOFT_CLIENT_SECRET.length > 0 &&
-                env.EMAIL_SENDER.length > 0
-        },
+        sherlockEnv: env.SHERLOCK_ENV,
         database: { path: resolveDatabasePath(env.DATABASE_URL) },
         logLevel: env.LOG_LEVEL,
         cacheTtlSeconds: env.CACHE_TTL_SECONDS
@@ -167,5 +137,5 @@ export function resetConfigForTesting(): void {
  */
 export function collectSecrets(): string[] {
     const config = getConfig();
-    return [config.ado.pat, config.email.clientSecret].filter(secret => secret.length >= 8);
+    return [config.ado.pat].filter(secret => secret.length >= 8);
 }

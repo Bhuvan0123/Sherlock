@@ -16,7 +16,7 @@ supporting_tools:
   - ado_get_blocked_items
   - ado_get_related_work_items
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "KaarPulse cannot add, remove or complete predecessor links."
   - "WIQL cannot project relation rows; saved queries list the item set, while blocker → downstream is shown in this response from analysis tools."
@@ -54,21 +54,21 @@ None. Optional: a work item id — still run the team view, then expand that ite
 - `analysis_items_blocking_release` — unresolved work others wait on.
 - `analysis_critical_dependencies` — longest chains and circular links.
 - `ado_get_blocked_items`, `ado_get_related_work_items` — drill-down.
-- `create_ado_query` — e.g. `Platform - Blocked Work` when count > 3.
+- `ado_query_work_items` — e.g. `Platform - Blocked Work` when count > 3.
 
 ## Workflow
 
 1. **Call `analysis_blocked_items` and `analysis_dependencies`.** Record coverage/limits. Deduplicate by id.
 2. **Call `analysis_cross_team_dependencies`, `analysis_items_blocking_release` and `analysis_critical_dependencies`.** Do not reconstruct chains from primitives while these succeed.
 3. **Group** into: blocked work; work blocking multiple items; cross-team dependencies; overdue dependencies; circular / critical chains.
-4. **Count.** For count > 3, `create_ado_query` with columns ID, Title, Type, State, Assigned To, Priority, Iteration, Parent, Planned End (if mapped). Title examples: `Platform - Blocked Work`, `Platform - Cross-Team Dependencies`, `Platform - Overdue Dependencies`. Reuse existing titles.
+4. **Count.** For count > 3, `ado_query_work_items` with columns ID, Title, Type, State, Assigned To, Priority, Iteration, Parent, Planned End (if mapped). Title examples: `Platform - Blocked Work`, `Platform - Cross-Team Dependencies`, `Platform - Overdue Dependencies`. Reuse existing titles.
 5. **Identify the highest-impact dependency** (most downstream items, or blocked + overdue + current sprint). Show:
 
 ```
 Blocker  →  Downstream items  →  Potential impact
 ```
 
-Use real ids and titles. Include work-item navigation from tool `webUrl` fields when present — never invent URLs. Query links come only from `create_ado_query`.
+Use real ids and titles. Include work-item navigation from tool `webUrl` fields when present — never invent URLs. Query links come only from `ado_query_work_items`.
 
 6. **Recommend** unblock order. KaarPulse cannot complete predecessors. No work items are modified.
 
@@ -83,6 +83,9 @@ Circular links are reported with the ids returned. Do not "fix" the loop in pros
 Do not blame a person for a cross-team wait.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow `_shared/output-format.md`.
 
@@ -108,7 +111,7 @@ Follow `_shared/output-format.md`.
 
 ## Safety Rules
 
-All of `_shared/safety-rules.md` applies. Work items and links stay read-only. `create_ado_query` is the only Azure DevOps write. Never invent a relation or a query URL.
+All of `_shared/safety-rules.md` applies. Work items and links stay read-only. `ado_query_work_items` is the only Azure DevOps write. Never invent a relation or a query URL.
 
 ## Example Requests
 

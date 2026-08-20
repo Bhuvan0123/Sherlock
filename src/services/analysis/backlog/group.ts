@@ -1,4 +1,4 @@
-import type { WorkItem } from '../../azure-devops/types.js';
+import type { WorkItem } from '../../../azure-devops/types.js';
 import type { BacklogContext, CategoryResult, Finding, FindingSeverity } from './types.js';
 import { kaarFlowQueryName } from './classify.js';
 

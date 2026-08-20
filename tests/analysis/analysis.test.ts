@@ -68,6 +68,10 @@ describe('workload analysis', () => {
         const arun = workload.members.find(entry => entry.member.displayName === 'Arun Kumar')!;
         expect(arun.counts.assignedOpen).toBeGreaterThan(0);
         expect(arun.counts.overdue).toBe(1);
+        expect(arun.items.active.length).toBeLessThanOrEqual(3);
+
+        expect(workload.overdueRules.some(r => r.label.includes('Due Date'))).toBe(true);
+        expect(workload.unassigned.items.length).toBeLessThanOrEqual(3);
 
         const idle = workload.members.find(entry => entry.member.displayName === 'Karthik Nair')!;
         expect(idle.counts.assignedOpen).toBe(0);
@@ -129,6 +133,7 @@ describe('deadline analysis', () => {
                 dueDateField: string | null;
                 counts: { overdue: number; dueToday: number; withinHorizon: number; withoutDueDate: number };
                 overdue: { item: { id: number }; risk: string; riskReasons: string[] }[];
+                overdueRules?: { rule: string; count: number }[];
                 upcoming: { item: { id: number }; risk: string; riskReasons: string[] }[];
             }>
         >('analysis_deadline_risk');
@@ -137,6 +142,7 @@ describe('deadline analysis', () => {
         expect(envelope.facts.overdue.map(entry => entry.item.id)).toContain(1111);
         expect(envelope.facts.upcoming.map(entry => entry.item.id)).toContain(1300);
         expect(envelope.facts.counts.overdue).toBe(1);
+        expect(envelope.facts.overdueRules?.some(r => r.rule === 'due-date' && r.count === 1)).toBe(true);
         expect(envelope.facts.counts.dueToday).toBe(1);
         expect(envelope.concerns.length).toBeGreaterThan(0);
         // Every rated item explains itself.

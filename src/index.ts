@@ -22,21 +22,9 @@ async function main(): Promise<void> {
         project: config.ado.project,
         team: config.ado.team,
         adoConfigured: config.ado.configured,
-        emailConfigured: config.email.configured,
         database: config.database.path,
         accessMode: 'READ-ONLY (Azure DevOps)'
     });
-
-    if (!config.ado.configured) {
-        log.warn(
-            'ADO_PAT is not set. The server will start and expose its tools, but Azure DevOps reads will fail until a read-only PAT is configured in .env.'
-        );
-    }
-    if (!config.email.configured) {
-        log.warn(
-            'Microsoft Graph email is not fully configured. Drafting works; sending will report a configuration error until MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET and EMAIL_SENDER are set.'
-        );
-    }
 
     const server = buildServer();
     const transport = new StdioServerTransport();

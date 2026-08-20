@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "k4k-team-lead-assistant": {
+    "sherlock": {
       "command": "npx",
       "args": ["-y", "tsx", "src/index.ts"],
       "env": {
         "LOG_LEVEL": "debug"
       }
     },
-    "k4k-team-lead-assistant-dist": {
+    "sherlock-dist": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {

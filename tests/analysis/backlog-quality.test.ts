@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { WorkItem } from '../../src/services/azure-devops/types.js';
+import type { WorkItem } from '../../src/azure-devops/types.js';
 import { analyseBacklog, buildRelationMaps } from '../../src/services/analysis/backlog/analyse.js';
 import type { BacklogContext } from '../../src/services/analysis/backlog/types.js';
 import { evaluateBacklogQuality } from '../../src/services/analysis/governance.service.js';

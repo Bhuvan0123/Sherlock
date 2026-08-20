@@ -1,5 +1,21 @@
 # Skills
 
+Built-in skills cover standup, morning brief, project health, sprint health, workload, deadlines, dependencies, backlog quality, stale work, delivery forecast, productivity review, weekly review and assignment recommendations.
+
+Each skill supports `brief`, `verbose` and `visual` modes where applicable. Skills use modules, recommendations, navigation links and controlled query creation when the result set is large enough.
+
+Examples:
+
+```text
+/daily-standup-starter brief
+/daily-standup-starter visual
+/workload-analysis brief
+/project-health-analysis visual
+```
+
+Saved-query behavior: S.H.E.R.L.O.C.K. stores generated/reused Azure DevOps queries under `My Queries/{ADO_TEAM}` and reuses matching queries only inside that configured team folder.
+# Skills
+
 KaarPulse skills are markdown workflows in `skills/<name>/SKILL.md`. They tell the Team Lead assistant **how** to use existing MCP tools. Loading a skill contacts nothing.
 
 ## Decision-support pipeline
@@ -49,6 +65,26 @@ Skills use `_shared/output-format.md`: KPI tables, status indicators, progress/w
 ## Recommendation framework
 
 Each recommendation answers what the TL should do, why, expected impact, and when. Evidence should be a real query link when a query exists. KaarPulse does not apply work-item changes.
+
+## Response modes (`skill_execute`)
+
+Every analysis skill supports **brief**, **verbose** and **visual**. These are different layouts, not three copies of the same text.
+
+| Mode | Audience | Structure |
+| --- | --- | --- |
+| brief | Fast TL decision | KPI table, at most 3 findings, at most 3 recommendations, important query links |
+| verbose | Investigation | Summary KPIs, evidence, items when count ≤ 3, queries when > 3, assumptions |
+| visual | Dashboard scan | KPI and findings tables, severity marks, navigation links |
+
+Severity marks: 🔴 critical · 🟠 attention · 🟡 watch · 🟢 healthy · 🔵 information.
+
+Work items stay read-only. Query names use the configured **team** name (not a hard-coded Platform prefix).
+
+## Programmatic execution
+
+Built-in and custom skills also run through `skill_execute` (modes: brief, verbose, visual). That path uses the shared data aggregator so a composed skill does not multiply Azure DevOps calls by the number of source skills.
+
+Compound **saved** skills should be composed once (`kaarflow_compose_skill`) rather than chaining four separate `skill_execute` calls for the same briefing.
 
 ## Safety
 

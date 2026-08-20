@@ -1,15 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAdoClient } from '../../../services/azure-devops/client.js';
-import { getAdoWriteClient, ADO_SAVED_QUERY_FOLDER } from '../../../services/azure-devops/write-client.js';
-import { getAdoUrlService } from '../../../services/azure-devops/url.service.js';
+import { getAdoClient } from '../../../azure-devops/client.js';
+import { getAdoWriteClient, getTeamSavedQueryFolder } from '../../../azure-devops/write-client.js';
+import { getNavigationEngine } from '../../../core/navigation-engine.js';
 import { getConfig } from '../../../config/env.js';
 import { registerTool } from '../../tool-registry.js';
 import { validateWiqlQuery } from '../../../security/read-only-policy.js';
 
 const CreateQuerySchema = {
     project: z.string().optional().describe('Azure DevOps project name or ID. Defaults to the configured project.'),
-    queryName: z.string().describe('Short, searchable saved-query title (e.g. "Platform - Overdue Work").'),
+    queryName: z.string().describe('Short, searchable saved-query title (e.g. "Overdue Work").'),
     queryDescription: z
         .string()
         .optional()
@@ -23,9 +23,9 @@ const CreateQuerySchema = {
         ),
     parentPath: z
         .string()
-        .default(ADO_SAVED_QUERY_FOLDER)
+        .optional()
         .describe(
-            `Folder to store the saved query. Defaults to "${ADO_SAVED_QUERY_FOLDER}".`
+            'Folder to store the saved query. Defaults to My Queries/{configured team}.'
         )
 };
 
@@ -45,7 +45,7 @@ export function registerAdoWriteTools(server: McpServer): void {
         name: 'create_ado_query',
         title: 'Create Azure DevOps Query',
         description:
-            `Creates a saved Azure DevOps Boards query. Stored under parentPath, which defaults to "${ADO_SAVED_QUERY_FOLDER}". Returns query metadata and a navigation URL. Does not modify work items. If a query with the same name already exists in that folder, returns the existing URL and result count so callers can reuse it.`,
+            'Creates a saved Azure DevOps Boards query under My Queries/{configured team} by default. Returns query metadata and a navigation URL. Does not modify work items. If a query with the same name already exists in that team folder, returns the existing URL and result count so callers can reuse it.',
         group: 'azure-devops',
         inputSchema: CreateQuerySchema,
         readOnly: false,
@@ -62,7 +62,7 @@ export function registerAdoWriteTools(server: McpServer): void {
             const queryFolder =
                 typeof args.parentPath === 'string' && args.parentPath.trim().length > 0
                     ? args.parentPath.trim()
-                    : ADO_SAVED_QUERY_FOLDER;
+                    : getTeamSavedQueryFolder(config.ado.team);
             const wiql = applySelectColumns(args.wiql as string, args.columns as string[] | undefined);
             const columnsMatch = [...wiql.matchAll(/\[([A-Za-z0-9_.]+)\]/g)].map(match => match[1]!);
             const selectClause = /^SELECT\s+([\s\S]+?)\s+FROM/i.exec(wiql)?.[1] ?? '';
@@ -82,7 +82,7 @@ export function registerAdoWriteTools(server: McpServer): void {
 
             const readClient = getAdoClient();
             const writeClient = getAdoWriteClient();
-            const urlService = getAdoUrlService();
+            const urlService = getNavigationEngine();
 
             let resultCount = 0;
             try {
@@ -123,7 +123,7 @@ export function registerAdoWriteTools(server: McpServer): void {
             try {
                 const existing = await writeClient.getQuery(project, `${queryFolder}/${queryName}`);
                 if (existing) {
-                    const savedQueryUrl = `${config.ado.baseUrl}/${encodeURIComponent(project)}/_queries/query/${existing.id}`;
+                    const savedQueryUrl = urlService.getQueryUrl(project, existing.id);
                     return {
                         success: false,
                         reused: true,
@@ -172,7 +172,7 @@ export function registerAdoWriteTools(server: McpServer): void {
             }
 
             const { url: navigationUrl, isLong } = urlService.getDynamicWiqlUrl(project, wiql);
-            const savedQueryUrl = `${config.ado.baseUrl}/${encodeURIComponent(project)}/_queries/query/${savedQuery.id}`;
+            const savedQueryUrl = urlService.getQueryUrl(project, savedQuery.id);
 
             return {
                 success: true,

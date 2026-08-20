@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { connectTestClient, type ConnectedClient } from '../helpers/mcp-client.js';
 import { setupHarness, type Harness } from '../helpers/harness.js';
-import { getAdoWriteClient } from '../../src/services/azure-devops/write-client.js';
+import { getAdoWriteClient } from '../../src/azure-devops/write-client.js';
 
 let harness: Harness;
 let mcp: ConnectedClient;
@@ -30,7 +30,7 @@ describe('create_ado_query', () => {
             if (init?.method === 'GET' && (url.includes('My%20Queries') || url.includes('My Queries'))) {
                 getCalledCount++;
                 // 1. Folder check (first GET) returns it's a folder
-                // 2. Duplicate check (second GET to /KaarFlow/MyQuery) returns 404
+                // 2. Duplicate check (second GET to /Platform/MyQuery) returns 404
                 if (url.includes('MyQuery')) {
                     return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 });
                 }
@@ -41,7 +41,7 @@ describe('create_ado_query', () => {
                 return new Response(JSON.stringify({
                     id: 'new-query-id',
                     name: 'MyQuery',
-                    path: 'My Queries/KaarFlow/MyQuery',
+                    path: 'My Queries/Platform/MyQuery',
                     isFolder: false,
                     hasChildren: false,
                     wiql: 'SELECT [System.Id] FROM WorkItems'
@@ -58,8 +58,8 @@ describe('create_ado_query', () => {
 
         // Override the write client and read client's fetch for this test
         // Or better yet, we just test the tool logic using our fake fetch
-        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/services/azure-devops/write-client.js');
-        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/services/azure-devops/client.js');
+        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/azure-devops/write-client.js');
+        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/azure-devops/client.js');
         
         setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fakeFetch));
         setAdoClientForTesting(new AzureDevOpsReadClient(fakeFetch));
@@ -75,7 +75,7 @@ describe('create_ado_query', () => {
         expect(result.resultCount).toBe(2);
         expect(result.navigationUrl).toContain('_workitems?_a=query');
         expect(result.savedQueryUrl).toContain('_queries/query/new-query-id');
-        expect(result.queryFolder).toBe('My Queries/KaarFlow');
+        expect(result.queryFolder).toBe('My Queries/Platform');
         expect(postCalled).toBe(true);
         expect(getCalledCount).toBe(2);
     });
@@ -95,7 +95,7 @@ describe('create_ado_query', () => {
                 return new Response(JSON.stringify({
                     id: 'custom-query-id',
                     name: 'CustomQuery',
-                    path: 'My Queries/KaarFlow/CustomQuery',
+                    path: 'My Queries/CustomTeam/CustomQuery',
                     isFolder: false,
                     hasChildren: false,
                     wiql: 'SELECT [System.Id] FROM WorkItems'
@@ -107,8 +107,8 @@ describe('create_ado_query', () => {
             return new Response(JSON.stringify({}), { status: 404 });
         };
 
-        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/services/azure-devops/write-client.js');
-        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/services/azure-devops/client.js');
+        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/azure-devops/write-client.js');
+        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/azure-devops/client.js');
 
         setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fakeFetch));
         setAdoClientForTesting(new AzureDevOpsReadClient(fakeFetch));
@@ -117,12 +117,12 @@ describe('create_ado_query', () => {
             project: 'K4K',
             queryName: 'CustomQuery',
             wiql: 'SELECT [System.Id] FROM WorkItems',
-            parentPath: 'My Queries/KaarFlow'
+            parentPath: 'My Queries/CustomTeam'
         });
 
         expect(result.success).toBe(true);
-        expect(result.queryFolder).toBe('My Queries/KaarFlow');
-        expect(postedUrl).toMatch(/My%20Queries\/KaarFlow|My Queries\/KaarFlow/);
+        expect(result.queryFolder).toBe('My Queries/CustomTeam');
+        expect(postedUrl).toMatch(/My%20Queries\/CustomTeam|My Queries\/CustomTeam/);
     });
 
     it('fails when WIQL contains forbidden mutation keywords', async () => {
@@ -148,8 +148,8 @@ describe('create_ado_query', () => {
             return new Response(JSON.stringify({}), { status: 404 });
         };
 
-        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/services/azure-devops/write-client.js');
-        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/services/azure-devops/client.js');
+        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/azure-devops/write-client.js');
+        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/azure-devops/client.js');
         
         setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fakeFetch));
         setAdoClientForTesting(new AzureDevOpsReadClient(fakeFetch));
@@ -181,8 +181,8 @@ describe('create_ado_query', () => {
             return new Response(JSON.stringify({}), { status: 404 });
         };
 
-        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/services/azure-devops/write-client.js');
-        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/services/azure-devops/client.js');
+        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/azure-devops/write-client.js');
+        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/azure-devops/client.js');
         
         setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fakeFetch));
         setAdoClientForTesting(new AzureDevOpsReadClient(fakeFetch));
@@ -219,7 +219,7 @@ describe('create_ado_query', () => {
                     JSON.stringify({
                         id: 'col-query-id',
                         name: 'ColQuery',
-                        path: 'My Queries/KaarFlow/ColQuery',
+                        path: 'My Queries/Platform/ColQuery',
                         isFolder: false,
                         hasChildren: false,
                         wiql: body.wiql
@@ -235,8 +235,8 @@ describe('create_ado_query', () => {
             return new Response(JSON.stringify({}), { status: 404 });
         };
 
-        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/services/azure-devops/write-client.js');
-        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/services/azure-devops/client.js');
+        const { AzureDevOpsWriteClient, setAdoWriteClientForTesting } = await import('../../src/azure-devops/write-client.js');
+        const { AzureDevOpsReadClient, setAdoClientForTesting } = await import('../../src/azure-devops/client.js');
 
         setAdoWriteClientForTesting(new AzureDevOpsWriteClient(fakeFetch));
         setAdoClientForTesting(new AzureDevOpsReadClient(fakeFetch));

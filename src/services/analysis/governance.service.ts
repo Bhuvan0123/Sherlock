@@ -1,5 +1,5 @@
 import { daysBetween, parseAdoDate } from '../../utils/dates.js';
-import type { WorkItem } from '../azure-devops/types.js';
+import type { WorkItem } from '../../azure-devops/types.js';
 import { analyseBacklog } from './backlog/analyse.js';
 import { hasChildHierarchy, isComplete, isOpen, typeKind } from './backlog/classify.js';
 import type { FindingSeverity } from './backlog/types.js';

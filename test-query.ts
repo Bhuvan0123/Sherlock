@@ -1,4 +1,4 @@
-import { WiqlBuilderService } from './src/services/azure-devops/wiql-builder.js';
+import { WiqlBuilderService } from './src/azure-devops/wiql-builder.js';
 
 async function run() {
     const builder = new WiqlBuilderService();

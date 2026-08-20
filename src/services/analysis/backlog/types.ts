@@ -1,4 +1,4 @@
-import type { WorkItem } from '../../azure-devops/types.js';
+import type { WorkItem } from '../../../azure-devops/types.js';
 
 export type FindingSeverity = 'Critical' | 'High' | 'Medium' | 'Low';
 

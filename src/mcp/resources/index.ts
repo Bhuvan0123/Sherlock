@@ -4,10 +4,10 @@ import { READ_ONLY_POST_ENDPOINTS, READ_ONLY_REFUSAL_MESSAGE } from '../../secur
 import { getDeadlineService } from '../../services/analysis/deadline.service.js';
 import { getProjectAnalysisService } from '../../services/analysis/project-analysis.service.js';
 import { getWorkloadService } from '../../services/analysis/workload.service.js';
-import { getProjectService } from '../../services/azure-devops/project.service.js';
-import { getSprintService } from '../../services/azure-devops/sprint.service.js';
-import { getTeamService } from '../../services/azure-devops/team.service.js';
-import { getWorkItemService } from '../../services/azure-devops/work-item.service.js';
+import { getProjectService } from '../../azure-devops/project.service.js';
+import { getSprintService } from '../../azure-devops/sprint.service.js';
+import { getTeamService } from '../../azure-devops/team.service.js';
+import { getWorkItemService } from '../../azure-devops/work-item.service.js';
 import { toAppError } from '../../utils/errors.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -138,16 +138,13 @@ export function registerResources(server: McpServer): void {
                         ],
                         statement: READ_ONLY_REFUSAL_MESSAGE
                     },
-                    email: {
-                        capability: 'Send only, via Microsoft Graph, as the configured sender mailbox.',
-                        confirmationRequired: true,
-                        rule: 'email_send_confirmed accepts only a draft id and confirmation=true. It cannot alter a draft, and no email is sent without explicit confirmation.',
-                        configured: config.email.configured,
-                        recipientAllowlist: config.email.allowedRecipients
+                    savedQueries: {
+                        capability: 'Controlled saved-query creation/reuse only.',
+                        folder: `My Queries/${config.ado.team}`,
+                        rule: 'Saved queries are isolated by configured team folder and do not modify work items.'
                     },
                     credentials: {
-                        azureDevOpsPat: 'Server-side only. Never logged, returned, or exposed through any tool, resource or error.',
-                        microsoftGraph: 'Separate client-credentials app registration. Secret never logged or returned.'
+                        azureDevOpsPat: 'Server-side only. Never logged, returned, stored, or exposed through any tool, resource or error.'
                     }
                 };
             }

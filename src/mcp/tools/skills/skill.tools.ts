@@ -1,8 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { SKILL_CATEGORIES, getSharedRules, getSkill, getSkills, toIndexEntry } from '../../../skills/loader.js';
+import { SKILL_CATEGORIES, getSharedRules, getSkill, getSkills, toIndexEntry } from '../../../skills/registry.js';
 import { AppError } from '../../../utils/errors.js';
 import { registerTool } from '../../tool-registry.js';
+import { SkillExecutor } from '../../../core/skill-executor.js';
+import { InternalSkillRegistry } from '../../../core/skill-registry.js';
 
 const ROUTING_NOTE =
     'Skills are workflow instructions, not data. Loading one never contacts Azure DevOps: follow its Workflow section and call the Azure DevOps and analysis tools it names.';
@@ -56,7 +58,11 @@ export function registerSkillTools(server: McpServer): void {
             include_shared_rules: z
                 .boolean()
                 .optional()
-                .describe('Include the shared data, analysis, output and safety rules. Default true; they are what keep a skill safe.')
+                .describe('Include the shared data, analysis, output and safety rules. Default true; they are what keep a skill safe.'),
+            mode: z
+                .enum(['brief', 'verbose', 'visual'])
+                .optional()
+                .describe('The requested output mode for the skill. Default is verbose. brief: concise summary. verbose: detailed item lists. visual: markdown tables or mermaid diagrams.')
         },
         audit: { category: 'maintenance', action: 'Load skill', subject: args => `skill:${String(args.name)}` },
         handler: async args => {
@@ -87,12 +93,46 @@ export function registerSkillTools(server: McpServer): void {
                 ...(includeShared
                     ? { sharedRules: getSharedRules().map(document => ({ name: document.name, content: document.content })) }
                     : { sharedRules: null, sharedRulesNote: 'Omitted by request. They still apply.' }),
-                note: ROUTING_NOTE
+                outputMode: args.mode ?? 'verbose',
+                note: ROUTING_NOTE + `\nIMPORTANT: The user requested output mode '${args.mode ?? 'verbose'}'. You MUST format your final response to follow this mode.`
             };
         },
         summarise: result => {
             const skill = result as { title: string; name: string; tools: { primary: string[] } };
             return `Loaded skill "${skill.title}" (${skill.name}). Follow its Workflow; primary tools: ${skill.tools.primary.join(', ') || 'none'}.`;
+        }
+    });
+
+    registerTool(server, {
+        name: 'skill_execute',
+        title: 'Execute a skill programmatically',
+        description:
+            'Executes a KaarFlow skill using the strict core architecture. This replaces manual tool-chaining and WIQL generation by the LLM. It returns the fully formatted Markdown ready to be relayed to the user.',
+        group: 'analysis',
+        inputSchema: {
+            name: z.string().min(1).describe('Skill name, for example "daily-standup-starter".'),
+            mode: z
+                .enum(['brief', 'verbose', 'visual'])
+                .optional()
+                .describe('The requested output mode for the skill. Default is brief.')
+        },
+        audit: { category: 'analysis', action: 'Execute skill programmatically', subject: args => `skill:${String(args.name)}` },
+        handler: async args => {
+            const requested = String(args.name).trim();
+            const skill = InternalSkillRegistry.getSkill(requested);
+            if (skill === null || skill.status === 'disabled') {
+                throw new AppError('NOT_FOUND', `There is no active skill named "${requested}".`, {
+                    hint: `Available skills: ${InternalSkillRegistry.listSkills(false)
+                        .map(candidate => candidate.name)
+                        .join(', ')}.`
+                });
+            }
+
+            const markdown = await SkillExecutor.executeSkill(skill as any, (args.mode as any) ?? skill.defaultMode, args);
+            return { markdown };
+        },
+        summarise: result => {
+            return `Successfully executed skill and generated formatted response. Relay the markdown exactly as provided.`;
         }
     });
 }

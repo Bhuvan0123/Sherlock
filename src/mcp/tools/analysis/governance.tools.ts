@@ -1,9 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getWorkItemService } from '../../../services/azure-devops/work-item.service.js';
-import { getTeamService } from '../../../services/azure-devops/team.service.js';
-import { getSprintService } from '../../../services/azure-devops/sprint.service.js';
-import { getProjectContext } from '../../../services/azure-devops/context.js';
-import { FieldMappingService } from '../../../services/azure-devops/field-mapping.js';
+import { getWorkItemService } from '../../../azure-devops/work-item.service.js';
+import { getTeamService } from '../../../azure-devops/team.service.js';
+import { getSprintService } from '../../../azure-devops/sprint.service.js';
+import { getProjectContext } from '../../../azure-devops/context.js';
+import { FieldMappingService } from '../../../azure-devops/field-mapping.js';
 import { getConfig } from '../../../config/env.js';
 import { registerTool } from '../../tool-registry.js';
 import { buildEnvelope } from '../../../services/analysis/types.js';
@@ -11,7 +11,7 @@ import { analyseBacklog, buildRelationMaps } from '../../../services/analysis/go
 import { evaluateHierarchy, evaluateStaleWork } from '../../../services/analysis/governance.service.js';
 import { calculateScheduleVariance } from '../../../services/analysis/schedule.service.js';
 import type { BacklogContext } from '../../../services/analysis/backlog/types.js';
-import type { WorkItem } from '../../../services/azure-devops/types.js';
+import type { WorkItem } from '../../../azure-devops/types.js';
 
 const SCAN_LIMIT = 500;
 

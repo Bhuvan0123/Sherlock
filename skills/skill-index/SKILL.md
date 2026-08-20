@@ -1,7 +1,7 @@
 ---
 name: skill-index
 title: Skill Index and Router
-description: The master guide that maps what the Team Lead asked for onto the right KaarPulse skill, and explains how to combine skills for a compound request without losing the read-only and email-confirmation guarantees.
+description: The master guide that maps what the Team Lead asked for onto the right S.H.E.R.L.O.C.K. skill, and explains how to combine skills for a compound request without losing the read-only guarantees.
 version: 1.0.0
 category: router
 mutates_azure_devops: false
@@ -11,7 +11,6 @@ primary_tools:
   - skill_get
 supporting_tools:
   - ado_get_connection_status
-  - email_get_configuration
 missing_capabilities:
   - "There is no skill for changing Azure DevOps, because the server cannot change Azure DevOps. Requests to modify work items route to a refusal plus an alternative, not to a skill."
   - "There is no skill for repository, pull-request, build, release or pipeline analysis: the server reads work-tracking data only."
@@ -52,7 +51,7 @@ Two things worth resolving before running a heavy workflow, if there is any doub
 | Check | Tool | Why |
 | --- | --- | --- |
 | Azure DevOps reachable and the PAT valid | `ado_get_connection_status` | Every skill depends on live reads; a clear connection error beats a half-empty report. |
-| Email actually configured | `email_get_configuration` | Only relevant before promising a send. Drafting always works; sending fails cleanly when Microsoft Graph is not configured. |
+| S.H.E.R.L.O.C.K. health | `sherlock_health_check` | Verifies configuration, Azure DevOps access, skills and database before running deeper analysis. |
 
 ## Data Sources
 
@@ -67,7 +66,7 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 2. **Check for a refusal case first.** If the request asks for an Azure DevOps change, handle it as described in Safety Rules rather than routing. This check comes before everything else.
 3. **Load the skill** with `skill_get`, using the shared rules it returns.
 4. **Follow that skill's Workflow section.** It names the exact tools and arguments. Do not substitute your own sequence.
-5. **For a compound request, plan the chain before starting** (see Combining Skills). Run analysis skills first, communication skills last.
+5. **For a compound request, plan the chain before starting** (see Combining Skills). Run narrower evidence-gathering skills before broader synthesis skills.
 6. **Produce one coherent answer**, not several stapled-together reports. When you combine skills, merge their output under a single structure and keep facts separated from generated analysis throughout.
 7. **If nothing fits**, say so and answer directly with the appropriate `ado_*` or `analysis_*` tools, stating which tools you used.
 
@@ -134,13 +133,16 @@ Both are local file reads. Loading a skill contacts nothing and changes nothing.
 | "Weekly review, and email it to the team" | `weekly-team-review` → `team-email-assistant` |
 | "Daily report plus suggestions for the unassigned items" | `daily-team-report` → `work-assignment-recommendation` |
 | "Project health, and where am I not following through?" | `project-health-analysis` → `tl-productivity-review` |
-| "Command-center view: brief, risks, load, blockers, backlog" | `team-morning-brief` → `deadline-risk-analysis` → `workload-analysis` → `dependency-analysis` → `backlog-data-quality` (reuse fetched data; one `create_ado_query` per unique category title) |
+| "Command-center view: brief, risks, load, blockers, backlog" | `team-morning-brief` → `deadline-risk-analysis` → `workload-analysis` → `dependency-analysis` → `backlog-data-quality` (reuse fetched data; one `ado_query_work_items` per unique category title) |
 
 When chaining, reuse what you already fetched rather than re-running the same tool, and never let a later skill contradict an earlier one — if two skills report the same count differently, say which tool produced which number and reconcile before answering. Do not create duplicate saved queries for the same category in one chain; reuse the first `savedQueryUrl` / `existingQueryUrl`.
 
 **Confirmation survives every chain.** Reaching `team-email-assistant` through a chain never implies consent to send. The Team Lead approving "brief me and draft the reminders" has approved drafting, not sending. Each draft is still shown in full and confirmed individually.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 When you route silently as part of answering, produce only the skill's own output. When the Team Lead asks what is available, or when a request is ambiguous enough that the choice should be visible, use:
 
@@ -190,7 +192,7 @@ Recommendation
 Communication
 - team-email-assistant — <description>
 
-Azure DevOps work items are read-only. Saved queries may be created via `create_ado_query` when a category has more than 3 items. Email is drafted for review and sent only after explicit confirmation.
+Azure DevOps work items are read-only. Saved queries may be created via `ado_query_work_items` when a category has more than 3 items. Email is drafted for review and sent only after explicit confirmation.
 ```
 
 ## Edge Cases

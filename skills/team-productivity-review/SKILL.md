@@ -19,13 +19,13 @@ supporting_tools:
   - ado_get_team_members
   - ado_get_work_item_history
   - ado_query_work_items
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "There is no measure of effort actually spent. Azure DevOps records estimates and remaining work, not hours worked, so productivity per person-hour cannot be calculated."
   - "Work done outside Azure DevOps - reviews, incident handling, mentoring, meetings, design work tracked elsewhere - is invisible to every tool here."
   - "Completion is attributed to the CURRENT assignee, so a reassigned item is credited to its current owner and the original contributor cannot be recovered from these tools."
   - "There is no per-person availability, leave or allocation data, so a low completed count cannot be separated from absence or part-time allocation."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - team productivity review
   - how is the team delivering
@@ -110,7 +110,7 @@ All data comes from KaarPulse MCP tools. There is no other source, and nothing h
 9. **Establish the sprint trend.** Take the sprint completion trend from the productivity envelope. If the Team Lead questions one sprint, call `ado_get_sprint_progress` with that sprint reference and `include_carry_over: true` to show committed versus completed and the carry-over evidence.
 10. **Assemble the output** in the order given below, marking every generated conclusion as interpretation.
 11. **Close with the read-only statement.** Nothing in this review changed Azure DevOps work items, and none of the recommendations can be carried out by KaarPulse.
-12. **Create queries** for significant groups (count > 3) via `create_ado_query`: `Platform - Late Completed Work`, `Platform - Carry-Over Work`, `Platform - Overdue Active Work`. Follow `_shared/query-workflow.md`. Do not rank people by completed-item count.
+12. **Create queries** for significant groups (count > 3) via `ado_query_work_items`: `Platform - Late Completed Work`, `Platform - Carry-Over Work`, `Platform - Overdue Active Work`. Follow `_shared/query-workflow.md`. Do not rank people by completed-item count.
 
 If `analysis_team_productivity` fails, run `analysis_team_delivery_metrics` alone, say plainly that the trend and carry-over sections are unavailable and why, and do not reconstruct them from primitives.
 
@@ -133,6 +133,9 @@ If `analysis_team_productivity` fails, run `analysis_team_delivery_metrics` alon
 **Offer the innocent explanation.** Where a number looks unusual, name the ordinary causes: leave, part-time allocation, a large item spanning the window, onboarding, work blocked by another team, or work tracked outside Azure DevOps. The tools cannot distinguish between these and anything else, and neither can you.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
@@ -179,7 +182,7 @@ All of `_shared/safety-rules.md` applies. The points that bite hardest here:
 - **No performance judgements about people.** This is the defining constraint of the skill. Assume the output will be forwarded to every person it names; write it so that would be fine.
 - **No manufactured precision.** No composite score, no velocity, no completion forecast, no percentage likelihood. Risk and workload stay categorical with their reasons attached, exactly as the tools return them.
 - **No invented data.** Every id, title, owner, count and date comes from a tool call made during this request. Unknown is not zero, and a metric that could not be measured is reported as such.
-- **Read-only for work items.** The review will surface work that ought to be re-sized, reassigned or closed. KaarPulse can do none of it. Saved queries via `create_ado_query` are allowed. End stating no work items were modified.
+- **Read-only for work items.** The review will surface work that ought to be re-sized, reassigned or closed. KaarPulse can do none of it. Saved queries via `ado_query_work_items` are allowed. End stating no work items were modified.
 - **No email as a side effect.** This skill never drafts or sends anything. If the Team Lead wants the findings sent on, hand over to `team-email-assistant`, where sending requires explicit per-draft confirmation.
 
 ## Example Requests

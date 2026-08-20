@@ -1,5 +1,5 @@
-import { RELATION } from '../../azure-devops/fields.js';
-import type { WorkItem } from '../../azure-devops/types.js';
+import { RELATION } from '../../../azure-devops/fields.js';
+import type { WorkItem } from '../../../azure-devops/types.js';
 
 export function typeKind(
     type: string

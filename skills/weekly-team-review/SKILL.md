@@ -23,14 +23,14 @@ supporting_tools:
   - tl_get_activity_summary
   - ado_get_team_members
   - ado_query_work_items
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "There is no snapshot of how the project looked at the start of the week, so before-and-after comparisons can only be made where a tool derives them from revision history."
   - "Sprint history depends on iterations being configured with start and finish dates; where they are not, per-sprint comparison is unavailable rather than zero."
   - "Cycle and lead time exist only for items carrying the required dates, and the tools report how many items were measurable."
   - "The local audit trail covers only what was done through this assistant, so a quiet week in the trail says nothing about work done in the Azure DevOps web UI, in meetings or in chat."
   - "Azure DevOps holds no leave or working-pattern data beyond the team's configured working days, so a quiet week cannot be separated from absence."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - weekly team review
   - how did the week go
@@ -116,7 +116,7 @@ All data comes from KaarPulse MCP tools. Two kinds of data are combined — live
 9. **Call `tl_get_activity_summary`** with `days: 7` when the Team Lead wants their own week included. Label it clearly as assistant activity, not as the whole of their work.
 10. **Assemble the output** in the order below, marking generated content and keeping every unmeasurable item in the explicit limitations line rather than silently omitting it.
 11. **Close with the read-only statement**, and offer the email hand-over if the review is to be shared.
-12. **Create queries** for recurring issue groups with count > 3 via `create_ado_query` (overdue, carry-over, blocked, missing dates). Follow `_shared/query-workflow.md`. Compare planned vs actual vs completed only where those figures were measured.
+12. **Create queries** for recurring issue groups with count > 3 via `ado_query_work_items` (overdue, carry-over, blocked, missing dates). Follow `_shared/query-workflow.md`. Compare planned vs actual vs completed only where those figures were measured.
 
 If `tl_get_weekly_review` fails, build the review from `analysis_team_productivity`, `ado_get_sprint_progress` and `ado_get_recently_changed_items`, and say which sections came from the fallback path.
 
@@ -145,6 +145,9 @@ If `tl_get_weekly_review` fails, build the review from `analysis_team_productivi
 **Recommendations for next week are suggestions.** Each names the item or person and why now, and each is something a human does in Azure DevOps.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
@@ -189,7 +192,7 @@ All of `_shared/safety-rules.md` applies. The points that bite hardest here:
 - **No performance judgements.** Per-member figures are counts of work, never a ranking or a characterisation. Assume the review will be read by everyone it names.
 - **No manufactured precision.** No velocity, no forecast for next week, no percentage likelihood. Risk and health stay categorical with their reasons attached.
 - **The audit trail's blind spot must be stated** wherever assistant activity appears, so a quiet trail is never read as a quiet week.
-- **Read-only for work items.** Everything the review suggests happens in Azure DevOps, by a human. Saved queries via `create_ado_query` are allowed. Every run states no work items were modified.
+- **Read-only for work items.** Everything the review suggests happens in Azure DevOps, by a human. Saved queries via `ado_query_work_items` are allowed. Every run states no work items were modified.
 - **No email as a side effect.** Sharing the review means handing over to `team-email-assistant`, where sending requires explicit per-draft confirmation.
 
 ## Example Requests

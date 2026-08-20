@@ -15,10 +15,10 @@ supporting_tools:
   - ado_get_parent_work_item
   - ado_get_work_item_hierarchy
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "KaarPulse cannot re-parent or create child work items."
-  - "There is no saved-query discovery tool. Reuse happens only when create_ado_query returns QUERY_ALREADY_EXISTS."
+  - "There is no saved-query discovery tool. Reuse happens only when ado_query_work_items returns QUERY_ALREADY_EXISTS."
   - "Flat WIQL cannot always express 'has no children'. Closest valid filters are used and the limitation is stated."
 triggers:
   - run hierarchy health analysis
@@ -33,7 +33,7 @@ triggers:
 
 ## Purpose
 
-Show whether the Platform backlog is a coherent Epic → Feature → User Story → Task tree, or a set of orphans and empty parents. Report affected **groups**, not every item. When a group has more than three work items, create or reuse a saved Azure DevOps query via `create_ado_query`.
+Show whether the Platform backlog is a coherent Epic → Feature → User Story → Task tree, or a set of orphans and empty parents. Report affected **groups**, not every item. When a group has more than three work items, create or reuse a saved Azure DevOps query via `ado_query_work_items`.
 
 ## When to Use
 
@@ -51,7 +51,7 @@ None. Scope is the configured project and team.
 - `ado_get_backlogs` — backlog levels and types actually in use.
 - `ado_query_work_items` — presets `epics`, `features`, `userStories`, `tasks`.
 - `ado_get_work_items_by_type`, `ado_get_parent_work_item`, `ado_get_work_item_hierarchy` — targeted parent/child checks. Do not N+1 the entire backlog; sample only when the composite tool is insufficient and state the sample size.
-- `create_ado_query` — saved query for groups with count > 3.
+- `ado_query_work_items` — saved query for groups with count > 3.
 
 ## Workflow
 
@@ -59,7 +59,7 @@ None. Scope is the configured project and team.
 2. **Call `analysis_hierarchy_health`.** Group `itemsWithIssues` by `issue`. Count each group.
 3. **If needed, corroborate** with `ado_query_work_items` by type. Reuse items already fetched. Avoid duplicate ADO scans.
 4. **Apply the count > 3 rule** from `_shared/query-workflow.md`. Example titles: `Platform - Orphaned Tasks`, `Platform - Stories Without Features`, `Platform - Empty Features`, `Platform - Closed Stories Without Tasks`.
-5. **Call `create_ado_query`** only for qualifying groups, using real type names and `System.Parent` in SELECT when available. On `QUERY_ALREADY_EXISTS`, reuse the URL.
+5. **Call `ado_query_work_items`** only for qualifying groups, using real type names and `System.Parent` in SELECT when available. On `QUERY_ALREADY_EXISTS`, reuse the URL.
 6. **Show groups, not dumps.** Three or fewer items: list them. More: count + query link.
 7. **Explain why it matters** (traceability, sprint planning, completion claims) and recommend cleanup order. No work items are modified.
 
@@ -74,6 +74,9 @@ Sampling honesty: if parent checks were sampled, report "n of N sampled", never 
 WIQL for "no children" is often approximate. State that the query lists candidate parents/types and the child gap was measured by the analysis tool.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow `_shared/output-format.md`.
 
@@ -103,7 +106,7 @@ Follow `_shared/output-format.md`.
 
 ## Safety Rules
 
-All of `_shared/safety-rules.md` applies. Work items stay read-only. Saved queries via `create_ado_query` are the only Azure DevOps write. Never invent URLs or parent relationships.
+All of `_shared/safety-rules.md` applies. Work items stay read-only. Saved queries via `ado_query_work_items` are the only Azure DevOps write. Never invent URLs or parent relationships.
 
 ## Example Requests
 

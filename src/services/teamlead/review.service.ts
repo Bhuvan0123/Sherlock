@@ -1,5 +1,4 @@
 import { startOfWeek, toDateOnly } from '../../utils/dates.js';
-import { getEmailRepository, type EmailRepository } from '../../database/repository/email.repository.js';
 import { getDeadlineService, type DeadlineService } from '../analysis/deadline.service.js';
 import { getDependencyService, type DependencyService } from '../analysis/dependency.service.js';
 import { getProductivityService, type ProductivityService } from '../analysis/productivity.service.js';
@@ -24,8 +23,6 @@ export interface TlProductivityFacts {
         /** Items the Team Lead looked at repeatedly that are still unresolved. */
         repeatedlyReviewedStillOpen: { subjectRef: string; occurrences: number; lastSeen: string }[];
         blockedItemsUnchangedFiveDaysPlus: number;
-        emailsSentInWindow: number;
-        draftsAwaitingConfirmation: number;
     };
 }
 
@@ -46,7 +43,6 @@ export interface TlWeeklyReviewFacts {
         healthConcerns: string[];
     };
     workload: { member: string; open: number; overdue: number; blocked: number }[];
-    emails: { drafted: number; sent: number; pending: number };
 }
 
 /**
@@ -64,8 +60,7 @@ export class TeamLeadReviewService {
         private readonly deadlines: DeadlineService = getDeadlineService(),
         private readonly dependencies: DependencyService = getDependencyService(),
         private readonly workload: WorkloadService = getWorkloadService(),
-        private readonly productivity: ProductivityService = getProductivityService(),
-        private readonly emails: EmailRepository = getEmailRepository()
+        private readonly productivity: ProductivityService = getProductivityService()
     ) {}
 
     /**
@@ -82,8 +77,6 @@ export class TeamLeadReviewService {
 
         const health = healthData ? this.projectAnalysis.rate(healthData.facts) : null;
         const staleBlocked = (blockedAnalysis?.facts.items ?? []).filter(entry => (entry.daysInState ?? 0) >= 5).length;
-        const pendingDrafts = this.emails.listDrafts({ status: 'pending_confirmation', limit: 100 }).length;
-
         // A repeatedly reviewed subject that is still open is the clearest
         // "follow-up did not land" signal available without ADO write access.
         const stillOpenSubjects = activitySummary.repeatedSubjects.filter(entry => {
@@ -111,9 +104,7 @@ export class TeamLeadReviewService {
             },
             followUp: {
                 repeatedlyReviewedStillOpen: stillOpenSubjects,
-                blockedItemsUnchangedFiveDaysPlus: staleBlocked,
-                emailsSentInWindow: activitySummary.emailsSent,
-                draftsAwaitingConfirmation: pendingDrafts
+                blockedItemsUnchangedFiveDaysPlus: staleBlocked
             }
         };
 
@@ -154,14 +145,6 @@ export class TeamLeadReviewService {
             concerns.push(`${facts.teamState.highPriorityUnassigned} high-priority item(s) are still unassigned.`);
             recommendations.push('Assign the high-priority unassigned items; analysis_assignment_recommendations proposes owners for each.');
         }
-        if (facts.followUp.draftsAwaitingConfirmation > 0) {
-            concerns.push(`${facts.followUp.draftsAwaitingConfirmation} email draft(s) are waiting for confirmation and have not been sent.`);
-        }
-        if (activitySummary.totalActions > 0 && activitySummary.emailsSent === 0 && facts.teamState.overdueItems > 0) {
-            recommendations.push(
-                'There is overdue work but no reminder has gone out through this assistant. email_draft_deadline_reminder prepares one for review.'
-            );
-        }
         if (activitySummary.byDay.length <= 2 && activitySummary.window.days >= 7) {
             recommendations.push(
                 'Monitoring is concentrated in very few days. A short daily review keeps overdue and blocked work from building up unseen.'
@@ -173,7 +156,7 @@ export class TeamLeadReviewService {
             concerns,
             recommendations,
             methodology: [
-                'Two data sources are combined: the local audit trail of this MCP server (tool calls, drafts, confirmations) and live Azure DevOps reads (overdue, blocked, unassigned, health).',
+                'Two data sources are combined: the local audit trail of this MCP server (tool calls) and live Azure DevOps reads (overdue, blocked, unassigned, health).',
                 'The audit trail cannot see work the Team Lead does directly in Azure DevOps or elsewhere, so a low action count does not mean low activity.',
                 'No percentage or score is produced. "Observed patterns", "potential improvement areas" and "recommended actions" are the only outputs, by design.',
                 'Follow-up effectiveness is inferred from state that has not changed (blocked items unchanged for 5+ days, repeatedly reviewed items still open), which is evidence of a stalled item rather than proof of a missed follow-up.'
@@ -194,14 +177,13 @@ export class TeamLeadReviewService {
                 busiestDay: { day: string; count: number } | null;
                 averageActionsPerActiveDay: number | null;
             };
-            emailDiscipline: { drafted: number; sent: number; cancelledOrExpired: number; confirmationRate: number | null };
+            reviewDiscipline: { analysisActions: number; queryActions: number };
         }>
     > {
         const summary = this.activity.getSummary(days);
-        const drafts = this.emails.listDrafts({ limit: 200 });
-        const sent = drafts.filter(draft => draft.status === 'sent').length;
-        const closedWithoutSending = drafts.filter(draft => draft.status === 'cancelled' || draft.status === 'expired').length;
         const busiestDay = [...summary.byDay].sort((a, b) => b.count - a.count)[0] ?? null;
+        const analysisActions = summary.byCategory.find(entry => entry.category === 'analysis')?.count ?? 0;
+        const queryActions = summary.byCategory.find(entry => entry.category === 'query_management')?.count ?? 0;
 
         const facts = {
             window: { days: summary.window.days },
@@ -214,12 +196,7 @@ export class TeamLeadReviewService {
                 averageActionsPerActiveDay:
                     summary.byDay.length > 0 ? Math.round((summary.totalActions / summary.byDay.length) * 10) / 10 : null
             },
-            emailDiscipline: {
-                drafted: drafts.length,
-                sent,
-                cancelledOrExpired: closedWithoutSending,
-                confirmationRate: drafts.length > 0 ? Math.round((sent / drafts.length) * 100) : null
-            }
+            reviewDiscipline: { analysisActions, queryActions }
         };
 
         const observations: string[] = [
@@ -230,27 +207,16 @@ export class TeamLeadReviewService {
         if (facts.toolUsage.length > 0) {
             observations.push(`Most used tools: ${facts.toolUsage.slice(0, 5).map(entry => `${entry.tool} (${entry.count})`).join(', ')}.`);
         }
-        if (facts.emailDiscipline.drafted > 0) {
-            observations.push(
-                `${facts.emailDiscipline.drafted} draft(s) prepared, ${facts.emailDiscipline.sent} confirmed and sent, ${facts.emailDiscipline.cancelledOrExpired} cancelled or expired.`
-            );
-        }
 
         const concerns: string[] = [];
         const recommendations: string[] = [];
         if (facts.coverage.daysWithActivity <= Math.max(1, Math.floor(facts.coverage.daysInWindow / 7)) && facts.coverage.daysInWindow >= 14) {
             concerns.push('Monitoring is sparse relative to the window, so most days had no recorded review.');
         }
-        const reviewHeavy = summary.byCategory.find(entry => entry.category === 'analysis')?.count ?? 0;
-        const actionOriented = (summary.byCategory.find(entry => entry.category === 'email_send')?.count ?? 0) +
-            (summary.byCategory.find(entry => entry.category === 'email_draft')?.count ?? 0);
-        if (reviewHeavy > 0 && actionOriented === 0) {
+        if (analysisActions > 0 && queryActions === 0) {
             recommendations.push(
-                'Analysis is being run without any resulting communication. Turning a finding into a drafted follow-up email is usually what closes the loop.'
+                'Analysis is being run without saved-query follow-through. Create team-scoped queries for recurring findings that need tracking.'
             );
-        }
-        if (facts.emailDiscipline.cancelledOrExpired > facts.emailDiscipline.sent) {
-            recommendations.push('More drafts are expiring than being sent; consider drafting only when ready to review and send.');
         }
 
         return buildEnvelope('tl_work_management', facts, {
@@ -258,7 +224,7 @@ export class TeamLeadReviewService {
             concerns,
             recommendations,
             methodology: [
-                'Derived entirely from the local audit trail and the local draft/send log of this MCP server.',
+                'Derived entirely from the local audit trail of this MCP server.',
                 'Counts describe interaction with this assistant, not the Team Lead\'s overall workload or effectiveness.'
             ],
             dataSource: 'Local MCP audit trail'
@@ -278,9 +244,6 @@ export class TeamLeadReviewService {
             this.dependencies.findCrossTeamDependencies(200).catch(() => null),
             this.deadlines.getDeadlineFacts(7).catch(() => null)
         ]);
-
-        const drafts = this.emails.listDrafts({ limit: 200 });
-        const sentThisWeek = this.emails.countSentSince(weekStart.toISOString());
 
         const facts: TlWeeklyReviewFacts = {
             weekOf: toDateOnly(weekStart),
@@ -305,12 +268,7 @@ export class TeamLeadReviewService {
                 open: member.counts.assignedOpen,
                 overdue: member.counts.overdue,
                 blocked: member.counts.blocked
-            })),
-            emails: {
-                drafted: drafts.filter(draft => draft.createdAt >= weekStart.toISOString()).length,
-                sent: sentThisWeek,
-                pending: drafts.filter(draft => draft.status === 'pending_confirmation').length
-            }
+            }))
         };
 
         const observations: string[] = [
@@ -335,9 +293,6 @@ export class TeamLeadReviewService {
         }
         if (facts.attention.crossTeamDependencies > 0) {
             recommendations.push(`Raise ${facts.attention.crossTeamDependencies} cross-team dependency link(s) with the owning teams.`);
-        }
-        if (facts.emails.pending > 0) {
-            recommendations.push(`${facts.emails.pending} email draft(s) are awaiting confirmation; review and send or cancel them.`);
         }
         const overloaded = facts.workload.filter(member => member.overdue >= 3);
         for (const member of overloaded) {

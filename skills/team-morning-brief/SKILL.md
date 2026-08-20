@@ -26,11 +26,11 @@ supporting_tools:
   - ado_get_field_mapping
   - ado_query_work_items
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Azure DevOps has no per-person availability or leave calendar, so the brief cannot know who is out today."
   - "Comments are not scanned for the brief; use ado_get_work_item_comments on a specific item when discussion context matters."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - give me today's team status
   - morning briefing
@@ -112,7 +112,7 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 7. **Note what changed since yesterday.** From the recent-changes facts, mention only material movement: items that closed, items that became blocked, items that gained or lost an owner. Skip field-level noise.
 8. **Carry the recommendations through.** Take the tool's `recommendations`, keep the three to five that matter most today, phrase each as a concrete follow-up naming the item and the person, and mark them as suggestions.
 9. **Group remaining categories** (overdue, due today, due within 3 calendar days from dated items, blocked, stale, high-priority active, missing planned dates, unassigned). Reuse lists already in the envelope; only call `analysis_stale_work`, `analysis_schedule_variance`, `analysis_backlog_quality` or `ado_get_field_mapping` when that category is missing from the primary result.
-10. **Create saved queries via `create_ado_query`** for each category with count > 3, following `_shared/query-workflow.md`. Titles: `Platform - Overdue Work`, `Platform - Due Within 3 Days`, `Platform - Stale Active Work`, `Platform - High Priority Active Work`, `Platform - Missing Planned Dates`. Count <= 3: list the items. Reuse `QUERY_ALREADY_EXISTS`. Never dump the full overdue list when a query exists.
+10. **Create saved queries via `ado_query_work_items`** for each category with count > 3, following `_shared/query-workflow.md`. Titles: `Platform - Overdue Work`, `Platform - Due Within 3 Days`, `Platform - Stale Active Work`, `Platform - High Priority Active Work`, `Platform - Missing Planned Dates`. Count <= 3: list the items. Reuse `QUERY_ALREADY_EXISTS`. Never dump the full overdue list when a query exists.
 11. **Build the TL Priority Queue** using the ranking in Analysis Rules (severity, deadline, downstream impact, priority, workload, sprint impact).
 12. **Close with the source footer.** No work items were modified. Saved queries, if created, are listed with real URLs.
 
@@ -141,6 +141,9 @@ Each entry states the single strongest reason, not all of them.
 
 ## Output Format
 
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
+
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
 
@@ -152,7 +155,7 @@ Use the templates from `_shared/templates/` to construct the response.
 5. **🚨 What Needs Your Attention**: The top 3-5 items from the analysis rules. Categories with count > 3 point at a query instead of listing every id.
 6. **👥 Workload bars** from measured active counts (scale to the busiest member).
 7. **🏃 Sprint Health**: progress bar only from `completionRate` or completed/total the tool returned.
-8. **🔎 Azure DevOps Queries**: Title | Description | Count | Navigate — only URLs from `create_ado_query`.
+8. **🔎 Azure DevOps Queries**: Title | Description | Count | Navigate — only URLs from `ado_query_work_items`.
 9. **🧠 Insights**, **💡 Recommendations**, **🧭 TL Decision Support** (if a real choice exists), **🎯 Recommended Actions** (Today / This Week / Optional).
 10. **⚠️ Data Quality**. Footer: **ADO Work Items Modified: No**.
 
@@ -178,7 +181,7 @@ Ensure you state that KaarPulse is read-only for Azure DevOps work items.
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only for work items.** The brief will surface work that obviously needs reassigning, closing or rescheduling. You cannot do any of it. Creating a saved query via `create_ado_query` is allowed. End every brief stating no work items were modified, and when asked to act, offer a recommendation, a query link, or an email draft instead.
+- **Read-only for work items.** The brief will surface work that obviously needs reassigning, closing or rescheduling. You cannot do any of it. Creating a saved query via `ado_query_work_items` is allowed. End every brief stating no work items were modified, and when asked to act, offer a recommendation, a query link, or an email draft instead.
 - **No performance judgements.** Never call a team member slow, unproductive or overloaded as a characteristic. Describe the work, name the factors, offer the innocent explanations.
 - **No invented data.** Every id, title, owner, date and count comes from a tool call in this run. Unknown is not zero.
 - **No email as a side effect.** The brief never drafts or sends anything on its own. If the Team Lead wants reminders, hand over to `team-email-assistant`, which requires explicit confirmation before anything goes out.

@@ -15,9 +15,9 @@ import {
     validateWiqlQuery
 } from '../../src/security/read-only-policy.js';
 import { ReadOnlyViolationError } from '../../src/utils/errors.js';
-import { AzureDevOpsReadClient } from '../../src/services/azure-devops/client.js';
-import { getWorkItemService } from '../../src/services/azure-devops/work-item.service.js';
-import { getProjectService } from '../../src/services/azure-devops/project.service.js';
+import { AzureDevOpsReadClient } from '../../src/azure-devops/client.js';
+import { getWorkItemService } from '../../src/azure-devops/work-item.service.js';
+import { getProjectService } from '../../src/azure-devops/project.service.js';
 import { setupHarness, type Harness } from '../helpers/harness.js';
 
 const BASE = 'https://dev.azure.com/KEBS4KAAR';
@@ -160,12 +160,9 @@ describe('tool surface audit', () => {
         }
     });
 
-    it('flags payload parameters outside the email drafting surface', () => {
+    it('flags payload parameters on all tools', () => {
         expect(auditToolSurface([{ name: 'ado_get_work_item', parameterNames: ['body'] }])).toHaveLength(1);
         expect(auditToolSurface([{ name: 'analysis_project', parameterNames: ['operations'] }])).toHaveLength(1);
-        expect(auditToolSurface([{ name: 'email_draft', parameterNames: ['body'] }])).toHaveLength(0);
-        // Even an email tool may not take a raw patch document.
-        expect(auditToolSurface([{ name: 'email_draft', parameterNames: ['patch_document'] }])).toHaveLength(1);
     });
 
     it('accepts the read-only tool shapes this server actually registers', () => {
@@ -175,7 +172,7 @@ describe('tool surface audit', () => {
                 { name: 'ado_get_work_items_by_assignee', parameterNames: ['member', 'sprint'] },
                 { name: 'analysis_assignment_recommendation', parameterNames: ['work_item_id'] },
                 { name: 'tl_get_activity', parameterNames: ['days', 'limit'] },
-                { name: 'email_send_confirmed', parameterNames: ['draft_id', 'confirmation'] }
+                { name: 'sherlock_health_check', parameterNames: [] }
             ])
         ).toEqual([]);
     });

@@ -13,7 +13,7 @@ supporting_tools:
   - ado_query_work_items
   - ado_get_overdue_items
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Variance cannot be calculated where planned or actual dates are unset — those items are excluded and counted as excluded, never estimated."
   - "There is no saved-query discovery tool. Reuse happens only via QUERY_ALREADY_EXISTS on a predictable title."
@@ -50,14 +50,14 @@ None. Optional focus ("only late completions") still measures all categories, th
 - `analysis_schedule_variance` — per-item start and completion variance days where dates exist.
 - `ado_query_work_items` — overdue / date-bounded corroboration. Reuse fetched items.
 - `ado_get_overdue_items` — open work past due/target.
-- `create_ado_query` — saved queries for categories with count > 3.
+- `ado_query_work_items` — saved queries for categories with count > 3.
 
 ## Workflow
 
 1. **Call `ado_get_field_mapping`.** If planned or actual fields are unavailable, say variance cannot be measured and stop the numeric analysis. Missing mapping is not "0 variance".
 2. **Call `analysis_schedule_variance`.** Keep items with null variance in an "excluded — dates missing" count.
 3. **Group** into late start, late completion / exceeding planned end, early completion, high variance (use the tool's days; do not invent a threshold — if you apply one, state it, e.g. completion delay > 7 calendar days).
-4. **Count each group.** Apply `_shared/query-workflow.md`: count > 3 → `create_ado_query`; count <= 3 → list items.
+4. **Count each group.** Apply `_shared/query-workflow.md`: count > 3 → `ado_query_work_items`; count <= 3 → list items.
 5. **Query titles** such as `Platform - Work Exceeding Planned End Date`, `Platform - Late Starts`, `Platform - High Schedule Variance`. Include planned and actual date columns from the mapping. Reuse on `QUERY_ALREADY_EXISTS`.
 6. **Build the category table** with Count, Avg Variance (only from items that had numeric variance — never average in nulls), and Query link.
 7. **Explain implications** for the current sprint and downstream work. Recommend date hygiene vs scope cuts as options. No work items are modified.
@@ -71,6 +71,9 @@ Average variance is the mean of measured `completionVarianceDays` or `startVaria
 Do not rank people. Variance is about the item.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow `_shared/output-format.md`.
 
@@ -97,7 +100,7 @@ Follow `_shared/output-format.md`.
 
 ## Safety Rules
 
-All of `_shared/safety-rules.md` applies. Work items are read-only. `create_ado_query` is the only Azure DevOps write. Never invent variance days or query URLs.
+All of `_shared/safety-rules.md` applies. Work items are read-only. `ado_query_work_items` is the only Azure DevOps write. Never invent variance days or query URLs.
 
 ## Example Requests
 

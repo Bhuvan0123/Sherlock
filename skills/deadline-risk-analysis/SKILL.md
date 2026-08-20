@@ -23,12 +23,12 @@ supporting_tools:
   - ado_query_work_items
   - analysis_schedule_variance
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Azure DevOps has no delivery-commitment or external-milestone register beyond iteration end dates, so contractual or customer deadlines cannot be seen."
   - "There is no per-person availability or leave calendar, so runway cannot account for who is away before a due date."
   - "Where the process defines no due-date field, lateness cannot be measured at all and only blocked, stale, priority and dependency signals remain."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - what is at risk
   - show me overdue work
@@ -109,7 +109,7 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 9. **Map each rating to the Team Lead's levels** using the mapping below, then apply the CRITICAL escalation rules. Escalation is a skill-level rule and must be labelled as such.
 10. **Assemble each entry in the required evidence shape** — level, id, verbatim title, the reasons the tool returned, and one recommended action. Deduplicate by id across the buckets and never sum buckets into a total.
 11. **Add the sprint-end and dependency sections**, then close with the read-only statement.
-12. **Group deadline categories** — overdue; due today; due within 3 calendar days; due within 7 days; high-priority approaching deadline; missing planned end; missing actual end on completed work; high schedule variance if `analysis_schedule_variance` was needed. Apply `_shared/query-workflow.md` (count > 3 → `create_ado_query`). Titles: `Platform - Overdue Work`, `Platform - Due Within 3 Days`, `Platform - High Priority Deadline Risk`, `Platform - Missing Planned End Dates`. Reuse existing queries. Never dump 50 overdue ids.
+12. **Group deadline categories** — overdue; due today; due within 3 calendar days; due within 7 days; high-priority approaching deadline; missing planned end; missing actual end on completed work; high schedule variance if `analysis_schedule_variance` was needed. Apply `_shared/query-workflow.md` (count > 3 → `ado_query_work_items`). Titles: `Platform - Overdue Work`, `Platform - Due Within 3 Days`, `Platform - High Priority Deadline Risk`, `Platform - Missing Planned End Dates`. Reuse existing queries. Never dump 50 overdue ids.
 
 If `analysis_deadline_risk` fails, fall back to `analysis_deadlines`, `ado_get_overdue_items` and `ado_get_work_items_due_this_week` for the measured lists, report the items without ratings, and say the ratings are unavailable rather than inventing them.
 
@@ -134,13 +134,16 @@ Nothing else escalates. An item rated `Low Risk` or `Medium Risk` by the tool is
 
 ## Output Format
 
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
+
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
 
 **Specific structure for Deadline Risk Analysis:**
 1. **Header**: `# 📊 KaarPulse — Deadline Risk Analysis`
 2. **Executive Summary**: 1-2 sentences highlighting the most urgent deadlines or missed items.
-3. **⏰ Deadline Watch**: Category | Count | Risk | Query — overdue, due today, due 3 days, due 7 days, missing planned end. Query column only when `create_ado_query` returned a URL.
+3. **⏰ Deadline Watch**: Category | Count | Risk | Query — overdue, due today, due 3 days, due 7 days, missing planned end. Query column only when `ado_query_work_items` returned a URL.
 4. **🚨 Risks Requiring Attention**: CRITICAL and HIGH items (list when <= 3; otherwise count + query).
 5. **🔎 Azure DevOps Queries**: Title | Description | Count | Navigate.
 6. **🧠 Insights** (not a repeat of counts), **💡 Recommendations**, **🧭 TL Decision Support**.
@@ -166,7 +169,7 @@ Use the templates from `_shared/templates/` to construct the response.
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only for work items.** Nothing here changes a state, a due date, an assignment or a sprint. Saved queries via `create_ado_query` are allowed. Say so at the end of every run, and when asked to act, offer the recommendation, query link, or an email draft instead.
+- **Read-only for work items.** Nothing here changes a state, a due date, an assignment or a sprint. Saved queries via `ado_query_work_items` are allowed. Say so at the end of every run, and when asked to act, offer the recommendation, query link, or an email draft instead.
 - **Categories, not probabilities.** Risk is LOW, MEDIUM, HIGH or CRITICAL with named reasons. Never attach a percentage, a forecast date or a confidence number the tools did not return.
 - **CRITICAL only under the documented conditions.** Escalating on instinct would make the level worthless the first time it is wrong.
 - **No performance judgements.** Late work is a fact about the item. It is not a statement about the person who owns it; give the innocent explanations where a pattern looks unusual.

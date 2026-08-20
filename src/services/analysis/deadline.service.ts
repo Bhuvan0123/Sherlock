@@ -1,8 +1,11 @@
 import { businessDaysBetween, daysBetween, describeRelativeDays, parseAdoDate, startOfDay } from '../../utils/dates.js';
-import { getSprintService, type Sprint, type SprintService } from '../azure-devops/sprint.service.js';
-import { getWorkItemService, type WorkItemService } from '../azure-devops/work-item.service.js';
-import type { WorkItem } from '../azure-devops/types.js';
-import { getWorkloadService, type WorkloadService } from './workload.service.js';
+import { getSprintService, type Sprint, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
+import type { WorkItem } from '../../azure-devops/types.js';
+import { DEADLINE_WORK_ITEM_FIELDS } from '../../azure-devops/field-profiles.js';
+import { FIELD } from '../../azure-devops/fields.js';
+import { wiql } from '../../azure-devops/wiql.js';
+import { OVERDUE_RULE, overdueRuleCount, type OverdueRuleCount } from './overdue.js';
 import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef, type RiskLevel } from './types.js';
 
 export interface DeadlineItem {
@@ -23,11 +26,25 @@ export interface DeadlineFacts {
     horizonDays: number;
     dueDateField: string | null;
     currentSprint: { name: string; finishDate: string | null; daysRemaining: number | null } | null;
-    counts: { overdue: number; dueToday: number; dueThisWeek: number; withinHorizon: number; withoutDueDate: number };
+    counts: {
+        overdue: number;
+        overdueDueDate: number;
+        overduePlannedEnd: number;
+        overdueSprint: number;
+        overdueHistorical: number;
+        dueToday: number;
+        dueThisWeek: number;
+        dueNext7DaysCount: number;
+        withinHorizon: number;
+        withoutDueDate: number;
+        missingDueDateCount: number;
+    };
+    overdueRules: OverdueRuleCount[];
     overdue: DeadlineItem[];
     upcoming: DeadlineItem[];
-    /** Open items with no due date at all - a real gap, reported rather than guessed at. */
     itemsWithoutDueDate: ItemRef[];
+    overdueDueDateIds: number[];
+    overduePlannedEndIds: number[];
 }
 
 /**
@@ -41,8 +58,7 @@ export interface DeadlineFacts {
 export class DeadlineService {
     constructor(
         private readonly workItems: WorkItemService = getWorkItemService(),
-        private readonly sprints: SprintService = getSprintService(),
-        private readonly workload: WorkloadService = getWorkloadService()
+        private readonly sprints: SprintService = getSprintService()
     ) {}
 
     /**
@@ -148,22 +164,52 @@ export class DeadlineService {
         };
     }
 
-    async getDeadlineFacts(horizonDays = 14): Promise<DeadlineFacts> {
+    async getDeadlineFacts(
+        horizonDays = 14,
+        options: { sampleLimit?: number } = {}
+    ): Promise<DeadlineFacts> {
         const horizon = Math.max(1, Math.min(horizonDays, 180));
+        const sampleLimit = Math.max(0, Math.min(options.sampleLimit ?? 5, 8));
         const now = startOfDay();
         const dueField = await this.workItems.dueDateField();
+        const weekEndOffset = (7 - (new Date().getDay() === 0 ? 7 : new Date().getDay())) % 7;
 
-        const [openItems, overdueItems, upcomingItems, blocked, sprint] = await Promise.all([
-            this.workItems.query([], { limit: 1000 }),
-            this.workItems.overdue({ limit: 500 }),
-            this.workItems.dueBetween(0, horizon, { limit: 500 }),
-            this.workItems.blocked({ limit: 300 }).catch(() => []),
-            this.sprints.getCurrentSprint().catch(() => null)
-        ]);
+        const [overdueIds, dueTodayIds, dueWeekIds, horizonIds, missingIds, plannedIds, histIds, sprint] =
+            await Promise.all([
+                this.workItems.overdueDueDateIds({ limit: 500 }),
+                this.workItems.dueBetweenIds(0, 0, { limit: 200 }),
+                this.workItems.dueBetweenIds(0, weekEndOffset, { limit: 200 }),
+                this.workItems.dueBetweenIds(0, horizon, { limit: 500 }),
+                this.workItems.missingDueDateIds({ limit: 500 }),
+                this.workItems.plannedEndOverdueIds({ limit: 500 }),
+                this.workItems.historicalOverdueIds({ limit: 200 }).catch(() => [] as number[]),
+                this.sprints.getCurrentSprint().catch(() => null)
+            ]);
 
-        const blockedIds = new Set(blocked.map(item => item.id));
-        const overloaded = await this.findOverloadedAssignees();
+        let sprintOverdue = 0;
+        if (sprint?.finishDate) {
+            const finish = parseAdoDate(sprint.finishDate);
+            if (finish && startOfDay(finish) < now) {
+                sprintOverdue = await this.workItems.queryCount(
+                    [wiql.under(FIELD.iterationPath, sprint.path)],
+                    { includeCompleted: false, limit: 500 }
+                );
+            }
+        }
 
+        const overdueBodies = await this.workItems.getByIds(overdueIds.slice(0, sampleLimit), {
+            profile: DEADLINE_WORK_ITEM_FIELDS
+        });
+        const upcomingBodies = await this.workItems.getByIds(horizonIds.slice(0, sampleLimit), {
+            profile: DEADLINE_WORK_ITEM_FIELDS
+        });
+        const missingBodies =
+            missingIds.length <= 3
+                ? await this.workItems.getByIds(missingIds, { profile: DEADLINE_WORK_ITEM_FIELDS })
+                : await this.workItems.getByIds(missingIds.slice(0, sampleLimit), { profile: DEADLINE_WORK_ITEM_FIELDS });
+
+        const blockedIds = new Set<number>();
+        const overloaded = new Set<string>();
         const rate = (items: WorkItem[]): DeadlineItem[] =>
             items
                 .map(item => {
@@ -180,10 +226,8 @@ export class DeadlineService {
                 .filter((entry): entry is DeadlineItem => entry !== null)
                 .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
 
-        const overdue = rate(overdueItems);
-        const upcoming = rate(upcomingItems);
-        const withoutDueDate = openItems.filter(item => !item.dueDate && !item.targetDate);
-        const weekEndOffset = (7 - (new Date().getDay() === 0 ? 7 : new Date().getDay())) % 7;
+        const overdue = rate(overdueBodies);
+        const upcoming = rate(upcomingBodies);
 
         return {
             horizonDays: horizon,
@@ -192,33 +236,30 @@ export class DeadlineService {
                 ? { name: sprint.name, finishDate: sprint.finishDate, daysRemaining: sprint.daysRemaining }
                 : null,
             counts: {
-                overdue: overdue.length,
-                dueToday: upcoming.filter(entry => entry.daysUntilDue === 0).length,
-                dueThisWeek: upcoming.filter(entry => entry.daysUntilDue >= 0 && entry.daysUntilDue <= weekEndOffset).length,
-                withinHorizon: upcoming.length,
-                withoutDueDate: withoutDueDate.length
+                overdue: overdueIds.length,
+                overdueDueDate: overdueIds.length,
+                overduePlannedEnd: plannedIds.length,
+                overdueSprint: sprintOverdue,
+                overdueHistorical: histIds.length,
+                dueToday: dueTodayIds.length,
+                dueThisWeek: dueWeekIds.length,
+                dueNext7DaysCount: dueWeekIds.length,
+                withinHorizon: horizonIds.length,
+                withoutDueDate: missingIds.length,
+                missingDueDateCount: missingIds.length
             },
+            overdueRules: [
+                overdueRuleCount('due-date', overdueIds.length),
+                overdueRuleCount('planned-end', plannedIds.length),
+                overdueRuleCount('sprint', sprintOverdue),
+                overdueRuleCount('historical', histIds.length)
+            ],
             overdue,
             upcoming,
-            itemsWithoutDueDate: withoutDueDate.slice(0, 50).map(toItemRef)
+            itemsWithoutDueDate: missingBodies.map(toItemRef),
+            overdueDueDateIds: overdueIds,
+            overduePlannedEndIds: plannedIds
         };
-    }
-
-    /** Assignees holding more open items than the team average. */
-    private async findOverloadedAssignees(): Promise<Set<string>> {
-        const overloaded = new Set<string>();
-        try {
-            const facts = await this.workload.getTeamWorkloadFacts();
-            const counts = facts.members.map(member => member.counts.assignedOpen);
-            if (counts.length === 0) return overloaded;
-            const mean = counts.reduce((sum, value) => sum + value, 0) / counts.length;
-            for (const member of facts.members) {
-                if (member.counts.assignedOpen > mean) overloaded.add(member.member.displayName.toLowerCase());
-            }
-        } catch {
-            // Workload data is an enrichment; deadline analysis still works without it.
-        }
-        return overloaded;
     }
 
     async analyzeDeadlineRisk(horizonDays = 14): Promise<AnalysisEnvelope<DeadlineFacts>> {
@@ -275,7 +316,11 @@ export class DeadlineService {
             concerns,
             recommendations,
             methodology: [
-                `Due dates come from ${facts.dueDateField ?? 'no available date field'}; TargetDate is used when DueDate is absent on an item.`,
+                `${OVERDUE_RULE.dueDate.label}: ${OVERDUE_RULE.dueDate.description}`,
+                `${OVERDUE_RULE.plannedEnd.label}: ${OVERDUE_RULE.plannedEnd.description}`,
+                `${OVERDUE_RULE.sprint.label}: ${OVERDUE_RULE.sprint.description}`,
+                `${OVERDUE_RULE.historical.label}: ${OVERDUE_RULE.historical.description}`,
+                `Due dates for risk samples come from ${facts.dueDateField ?? 'no available date field'}.`,
                 'High Risk when: the due date has passed; or the item is not started with <= 2 working days left; or the item is blocked; or booked remaining work exceeds the working hours left (6h per working day assumed); or it is unassigned with <= 2 days left.',
                 'Medium Risk when: unassigned with <= 5 days left; or the assignee is above the team average open workload; or the due date falls after the current sprint ends.',
                 'Low Risk when no rule above fires. These are categories, not probabilities - no statistical forecast is performed.'

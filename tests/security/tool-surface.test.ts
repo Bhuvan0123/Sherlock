@@ -22,7 +22,7 @@ let mcp: ConnectedClient;
 let tools: Tool[];
 
 beforeEach(async () => {
-    harness = setupHarness({ emailConfigured: true });
+    harness = setupHarness();
     mcp = await connectTestClient();
     tools = await mcp.listTools();
 });
@@ -42,9 +42,10 @@ describe('exposed tool surface', () => {
         const names = tools.map(tool => tool.name);
         expect(names.length).toBeGreaterThan(50);
 
-        for (const prefix of ['ado_', 'analysis_', 'tl_', 'email_']) {
+        for (const prefix of ['ado_', 'analysis_', 'tl_']) {
             expect(names.filter(name => name.startsWith(prefix)).length).toBeGreaterThan(0);
         }
+        expect(names.filter(name => name.startsWith('email_'))).toEqual([]);
 
         // Spot-check the tools the acceptance criteria call out by name.
         for (const required of [
@@ -69,10 +70,7 @@ describe('exposed tool surface', () => {
             'tl_get_activity',
             'tl_get_weekly_review',
             'tl_analyze_productivity',
-            'email_get_team_contacts',
-            'email_draft',
-            'email_draft_deadline_reminder',
-            'email_send_confirmed'
+            'sherlock_health_check'
         ]) {
             expect(names, `missing tool ${required}`).toContain(required);
         }
@@ -85,17 +83,17 @@ describe('exposed tool surface', () => {
         expect(offenders.map(tool => tool.name)).toEqual([]);
     });
 
-    it('names every non-email tool with a read verb, except saved-query creation', () => {
-        const readVerb = /^(ado_(get|search|refresh|query)_|analysis_|tl_(get|analyze|purge)_|skill_(list|get)$|create_ado_query$)/;
-        for (const tool of tools.filter(candidate => !candidate.name.startsWith('email_'))) {
+    it('names every tool with an allowed verb, except saved-query creation', () => {
+        const readVerb = /^(ado_(get|search|refresh|query)_|analysis_|tl_(get|analyze|purge)_|skill_(list|get|execute)$|kaarflow_(create|compose|list|update|remove|enable|disable|duplicate|get)_skills?$|create_ado_query$|sherlock_health_check$)/;
+        for (const tool of tools) {
             expect(tool.name, `tool ${tool.name} is not named as a read operation`).toMatch(readVerb);
         }
     });
 
     it('has no tool containing a mutation verb except create_ado_query', () => {
-        const mutationVerbs = ['create', 'update', 'delete', 'edit', 'modify', 'patch', 'write', 'post_', 'put_', 'reopen', 'reassign'];
+        const mutationVerbs = ['create', 'add', 'new', 'update', 'edit', 'modify', 'delete', 'remove'];
         for (const tool of tools) {
-            if (tool.name === 'create_ado_query') continue;
+            if (tool.name === 'create_ado_query' || tool.name.startsWith('kaarflow_')) continue;
             for (const verb of mutationVerbs) {
                 expect(tool.name.toLowerCase(), `tool ${tool.name} contains mutation verb "${verb}"`).not.toContain(verb);
             }
@@ -114,12 +112,11 @@ describe('exposed tool surface', () => {
         }
     });
 
-    it('only accepts a payload-shaped parameter on the email drafting surface', () => {
+    it('accepts no payload-shaped parameters', () => {
         for (const tool of tools) {
             for (const parameter of parameterNames(tool)) {
                 if (!(FORBIDDEN_PAYLOAD_PARAMETER_NAMES as readonly string[]).includes(parameter.toLowerCase())) continue;
-                expect(tool.name.startsWith('email_'), `tool ${tool.name} accepts payload parameter ${parameter}`).toBe(true);
-                expect(parameter.toLowerCase()).toBe('body');
+                expect.fail(`tool ${tool.name} accepts payload parameter ${parameter}`);
             }
         }
     });
@@ -131,9 +128,9 @@ describe('exposed tool surface', () => {
         expect(violations).toEqual([]);
     });
 
-    it('marks every tool except confirmed email sending and saved-query creation as read-only', () => {
+    it('marks every tool except saved-query creation as read-only', () => {
         const nonReadOnly = tools.filter(tool => tool.annotations?.readOnlyHint !== true).map(tool => tool.name).sort();
-        expect(nonReadOnly).toEqual(['create_ado_query', 'email_send_confirmed']);
+        expect(nonReadOnly).toEqual(['create_ado_query']);
     });
 
     it('marks no tool as destructive', () => {
@@ -176,7 +173,7 @@ describe('exposed tool surface', () => {
         const contents = await mcp.client.readResource({ uri: policy!.uri });
         const text = String((contents.contents[0] as { text?: string }).text ?? '');
         expect(text.toLowerCase()).toContain('read-only');
-        expect(text.toLowerCase()).toContain('confirmation');
+        expect(text.toLowerCase()).toContain('saved quer');
     });
 
     it('describes Azure DevOps tools as read-only in their descriptions', () => {
@@ -187,27 +184,8 @@ describe('exposed tool surface', () => {
         }
     });
 
-    it('requires explicit confirmation on the only sending tool', () => {
-        const send = tools.find(tool => tool.name === 'email_send_confirmed');
-        expect(send).toBeDefined();
-
-        const schema = send!.inputSchema as {
-            properties?: Record<string, unknown>;
-            required?: string[];
-        };
-        expect(Object.keys(schema.properties ?? {}).sort()).toEqual([
-            'confirmation',
-            'draft_id',
-            'expected_body_sha256'
-        ]);
-        expect(schema.required?.sort()).toEqual(['confirmation', 'draft_id']);
-
-        // The confirmed content cannot be altered at send time: there is no
-        // recipient, subject or body parameter on this tool. `expected_body_sha256`
-        // can only make the send stricter, never change what is sent.
-        for (const forbidden of ['to', 'cc', 'subject', 'body', 'recipients']) {
-            expect(Object.keys(schema.properties ?? {})).not.toContain(forbidden);
-        }
+    it('does not expose V1 email tools', () => {
+        expect(tools.map(tool => tool.name).filter(name => name.includes('email'))).toEqual([]);
     });
 
     it('returns a clear refusal when a work-item change is requested via a read tool', async () => {

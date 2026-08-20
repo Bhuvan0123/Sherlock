@@ -1,7 +1,7 @@
-import { getAdoAnalyticsService, type AdoAnalyticsService, type DeliveryMetrics } from '../azure-devops/analytics.service.js';
-import { getProjectService, type ProjectService } from '../azure-devops/project.service.js';
-import { getSprintService, type SprintProgress, type SprintService } from '../azure-devops/sprint.service.js';
-import { getWorkItemService, type WorkItemService } from '../azure-devops/work-item.service.js';
+import { getAdoAnalyticsService, type AdoAnalyticsService, type DeliveryMetrics } from '../../azure-devops/analytics.service.js';
+import { getProjectService, type ProjectService } from '../../azure-devops/project.service.js';
+import { getSprintService, type SprintProgress, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
 import { getDeadlineService, type DeadlineService } from './deadline.service.js';
 import { getDependencyService, type DependencyService } from './dependency.service.js';
 import { getWorkloadService, type TeamWorkloadFacts, type WorkloadService } from './workload.service.js';

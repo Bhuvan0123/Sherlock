@@ -12,7 +12,7 @@ supporting_tools:
   - ado_query_work_items
   - ado_get_blocked_items
   - ado_get_work_item
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Silence in Azure DevOps is not proof that nobody worked — comments elsewhere, meetings and work tracked outside ADO are invisible."
   - "There is no saved-query discovery tool. Reuse happens only via QUERY_ALREADY_EXISTS."
@@ -46,7 +46,7 @@ None. Optional: a minimum age ("only 30 days") — still compute all bands, then
 - `analysis_stale_work` — items with 7 / 14 / 30 day flags and tool severity.
 - `ado_query_work_items` with `preset: stale` (14-day default in the query engine) to corroborate. Do not treat the preset as the 7-day band.
 - `ado_get_blocked_items` — so blocked/waiting work is not narrated as abandoned without evidence.
-- `create_ado_query` — queries for bands with count > 3.
+- `ado_query_work_items` — queries for bands with count > 3.
 
 ## Workflow
 
@@ -65,6 +65,9 @@ The analysis tool skips completed/removed items and typically skips waiting/hold
 Never judge the assignee. Stale is a signal about the item.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow `_shared/output-format.md`.
 
@@ -90,7 +93,7 @@ Follow `_shared/output-format.md`.
 
 ## Safety Rules
 
-All of `_shared/safety-rules.md` applies. Read-only for work items. `create_ado_query` only for saved queries. Never fabricate last-changed dates or URLs.
+All of `_shared/safety-rules.md` applies. Read-only for work items. `ado_query_work_items` only for saved queries. Never fabricate last-changed dates or URLs.
 
 ## Example Requests
 

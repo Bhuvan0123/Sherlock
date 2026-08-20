@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAdoClient } from '../../../services/azure-devops/client.js';
-import { getWorkItemService } from '../../../services/azure-devops/work-item.service.js';
-import { WiqlBuilderService, type QueryPreset } from '../../../services/azure-devops/wiql-builder.js';
+import { getAdoClient } from '../../../azure-devops/client.js';
+import { getWorkItemService } from '../../../azure-devops/work-item.service.js';
+import { QueryEngine } from '../../../core/query-engine.js';
+import { ContextManager } from '../../../core/context-manager.js';
 import { getConfig } from '../../../config/env.js';
 import { registerTool } from '../../tool-registry.js';
 import { AppError } from '../../../utils/errors.js';
@@ -50,7 +51,7 @@ const QuerySchema = {
 };
 
 export function registerQueryTools(server: McpServer): void {
-    const wiqlBuilder = new WiqlBuilderService();
+    const queryEngine = new QueryEngine();
 
     registerTool(server, {
         name: 'ado_query_work_items',
@@ -71,13 +72,11 @@ export function registerQueryTools(server: McpServer): void {
             const wiService = getWorkItemService();
             const client = getAdoClient();
             
-            let teamScopeCondition = null;
-            if (args.team) {
-                teamScopeCondition = await wiService.getTeamScopeCondition();
-            }
+            // Build Context
+            const context = await ContextManager.buildContext();
 
             // Build WIQL
-            const wiqlStr = wiqlBuilder.buildQuery(args, teamScopeCondition);
+            const wiqlStr = await queryEngine.buildWIQL(args, context);
             
             // Execute WIQL to get IDs
             const startedAt = Date.now();

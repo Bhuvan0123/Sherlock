@@ -18,17 +18,15 @@ supporting_tools:
   - analysis_blocked_items
   - analysis_cross_team_dependencies
   - ado_get_unassigned_items
-  - email_get_send_log
-  - email_list_drafts
   - ado_get_overdue_items
   - ado_query_work_items
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "The audit trail records only actions taken through this MCP server. Work done directly in the Azure DevOps web UI, in meetings, in Teams chat or by email outside this assistant is invisible to every tool here."
   - "There is no measure of time spent, decisions made or conversations held, so nothing about management effort or diligence can be derived."
   - "Azure DevOps does not attribute a field change to the person who prompted it, so a follow-up that worked cannot be linked back to the Team Lead's action."
   - "There is no benchmark or peer comparison for a Team Lead, and the server produces no management score of any kind."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - review my own activity
   - how am i managing the team
@@ -72,7 +70,7 @@ Optional, if the Team Lead supplies them:
 | Input | Effect |
 | --- | --- |
 | A window ("last month") | Pass as `days`. `tl_analyze_productivity` defaults to 14, `tl_analyze_work_management` to 30, `tl_get_activity_summary` to 7, `tl_analyze_activity` to 14. State the resolved window per tool rather than implying one window covered everything. |
-| A category ("just the email activity") | `tl_get_activity` accepts a `category`. The permitted values are audit-trail categories rather than tool names: project review, team review, work item lookup, search, analysis, report, email draft, email send, confirmation, recommendation review and maintenance, each written in lower snake case. |
+| A category ("just the analysis activity") | `tl_get_activity` accepts a `category`. The permitted values are audit-trail categories rather than tool names: project review, team review, work item lookup, search, analysis, report, recommendation review and maintenance, each written in lower snake case. |
 | An outcome ("show me what failed") | `tl_get_activity` accepts `outcome` from `success`, `error`, `rejected`. |
 | A specific tool name | `tl_get_activity` accepts `tool`, for questions such as "how often did I look at blocked work". |
 
@@ -84,8 +82,8 @@ All data comes from KaarPulse MCP tools. Two distinct kinds of data are combined
 
 **Primary:**
 
-- `tl_analyze_productivity` (`days`, default 14) — combines the local trail with live Azure DevOps state: monitoring frequency, long-blocked items that repeated follow-ups have not moved, subjects reviewed more than once that are still open, unassigned high-priority work, and drafts prepared but never sent. Returns the standard envelope and produces no score.
-- `tl_analyze_work_management` (`days`, default 30) — tool mix, category mix, days with activity against days in the window, busiest day, and email discipline: drafted against sent against expired.
+- `tl_analyze_productivity` (`days`, default 14) — combines the local trail with live Azure DevOps state: monitoring frequency, long-blocked items that repeated follow-ups have not moved, subjects reviewed more than once that are still open, and unassigned high-priority work. Returns the standard envelope and produces no score.
+- `tl_analyze_work_management` (`days`, default 30) — tool mix, category mix, days with activity against days in the window, busiest day, and review discipline.
 
 **Supporting:**
 
@@ -99,8 +97,7 @@ All data comes from KaarPulse MCP tools. Two distinct kinds of data are combined
 | Blocked items with evidence and days in state | `analysis_blocked_items` |
 | Dependencies on other teams that need chasing | `analysis_cross_team_dependencies` |
 | Work still without an owner | `ado_get_unassigned_items` |
-| What was actually sent, and when | `email_get_send_log` |
-| Drafts left pending, cancelled or expired | `email_list_drafts` |
+| Saved-query follow-through | `tl_get_activity` filtered to `query_management` |
 
 The audit trail stores a redacted parameter and result summary only. It never stores credentials and never stores email bodies, so this review cannot quote what an email said.
 
@@ -112,12 +109,12 @@ The audit trail stores a redacted parameter and result summary only. It never st
 4. **Establish how much history exists.** Call `tl_get_activity_summary` (`days`) for the totals by category, tool, outcome and day, and for subjects revisited more than once. If the trail is empty or covers only a few days, that fact leads the output.
 5. **Read the envelopes and keep the two data kinds apart.** Local trail facts and live Azure DevOps facts are both measured, but they answer different questions; `observations`, `concerns` and `recommendations` are generated. Note `methodology` for the thresholds you will quote.
 6. **Verify each standing risk against live data before reporting it.** For a long-blocked item call `analysis_blocked_items`; for unowned work `ado_get_unassigned_items`; for an imbalance `analysis_work_distribution`; for external dependencies `analysis_cross_team_dependencies`; for the overall picture `analysis_project_health`. A risk is only worth raising if it is still true now.
-7. **Check email follow-through.** Call `email_list_drafts` for drafts that are pending, cancelled or expired, and `email_get_send_log` for what actually went out. A draft that expired unsent is a follow-through gap worth naming; it is not a failing.
+7. **Check query follow-through.** Use `tl_get_activity` to compare analysis volume with `query_management` activity. Repeated analysis without saved-query creation can indicate findings are not being tracked.
 8. **Drill in only where it is needed.** Use `tl_get_activity` with `category`, `tool` or `outcome` to substantiate a specific claim, for example that the same work item was looked up on five separate days.
 9. **Assemble the output** in the order below, with `Observed data` and `AI interpretation` visibly separated in every section that contains both.
 10. **State the trail's limitation explicitly**, in the header and again beside any finding that depends on activity counts.
 11. **Close with the read-only statement.**
-12. **Create queries** via `create_ado_query` for underlying work-item groups with count > 3 (unassigned high-priority, long-blocked, overdue still open after repeated review) following `_shared/query-workflow.md`. Do not make unsupported claims about management quality.
+12. **Create queries** via `ado_query_work_items` for underlying work-item groups with count > 3 (unassigned high-priority, long-blocked, overdue still open after repeated review) following `_shared/query-workflow.md`. Do not make unsupported claims about management quality.
 
 If `tl_analyze_productivity` fails, run `tl_analyze_activity` and `tl_get_activity_summary` instead, and say plainly that the live-state correlation is missing from this run.
 
@@ -137,11 +134,14 @@ If `tl_analyze_productivity` fails, run `tl_analyze_activity` and `tl_get_activi
 
 **Use the server's thresholds and quote them.** `analysis_blocked_items` flags items unchanged for five or more days. `analysis_work_distribution` flags imbalance only when the busiest member holds at least twice the median and at least four more items than the lightest. Quote the rule that fired.
 
-**Improvements are about coverage, not character.** An entry under `AREAS FOR IMPROVEMENT` names a specific gap in what is tracked or followed up — an unowned priority-1 item, a draft that expired, a dependency nobody has chased — and never a trait.
+**Improvements are about coverage, not character.** An entry under `AREAS FOR IMPROVEMENT` names a specific gap in what is tracked or followed up — an unowned priority-1 item, repeated analysis without a saved query, a dependency nobody has chased — and never a trait.
 
 **No score.** No percentage, no grade, no maturity level, no comparison to any benchmark. The server produces none, and neither may this skill.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
@@ -151,7 +151,7 @@ Use the templates from `_shared/templates/` to construct the response.
 2. **Executive Summary**: State the window, the busiest day, and an overarching observation.
    *CRITICAL: Include the scope note that this ONLY tracks KaarPulse usage.*
 3. **📌 At a Glance (TL Activity Summary)**:
-   Provide a KPI table of: Recorded actions, Busiest day, Top Category, Subjects reviewed more than once, Emails drafted vs sent.
+   Provide a KPI table of: Recorded actions, Busiest day, Top Category, Subjects reviewed more than once, Query-management actions.
 4. **🔎 Key Findings & 🚨 Risks**: 
    - `MANAGEMENT SIGNALS` (Observed data only, e.g., an item reviewed X times but still open).
    - Unassigned priority items or long-blocked items.
@@ -172,9 +172,7 @@ Ensure you state: "No Azure DevOps work items were modified."
 | Activity is concentrated in one or two days | Report the distribution as a fact. Do not describe it as inconsistent, sporadic or reactive; the assistant may simply be used at sprint boundaries. |
 | A subject was reviewed repeatedly and is now closed | That is follow-through, and it belongs in `MANAGEMENT SIGNALS` as observed data. Do not list it as a gap. |
 | An item was reviewed repeatedly and has not moved | Report both halves — the review count from the trail and the live state and days in state — and offer the non-management explanations before any interpretation. |
-| A draft was created and never sent | Report it as a follow-through gap with the draft id and status from `email_list_drafts`. Note that drafts expire by default after 60 minutes, so an expired draft may simply mean the conversation moved on. |
-| The send log is empty but drafts exist | State both facts. Never conclude that the Team Lead avoided communicating; email may have been sent from Outlook, which this server cannot see. |
-| Microsoft Graph is not configured | `email_get_configuration` will say so. Drafting works, sending does not, so unsent drafts may reflect configuration rather than follow-through. Check before naming a gap. |
+| No saved-query follow-through exists | State that the audit trail has analysis activity but no controlled saved-query creation; do not infer whether an offline conversation happened. |
 | Errors or rejected outcomes appear in the trail | Report the counts and the tools involved. A `rejected` row usually means a refused email send, which is the safety gate working as intended, not a mistake. |
 | The Team Lead asks for a score, a grade or a comparison to other leads | Decline and explain that the server produces no score and holds no comparison data. Offer the coverage and follow-through facts instead. |
 | The Team Lead asks whether they are working hard enough | Decline the question directly. The trail records tool calls, not effort or hours, and nothing about diligence can be derived from it. |
@@ -188,7 +186,7 @@ All of `_shared/safety-rules.md` applies. The points that bite hardest here:
 - **The trail's blind spot must be stated, not buried.** It appears in the header and again next to any finding that rests on activity counts. Silently letting a low count read as inactivity is the primary failure mode of this skill.
 - **No inference from missing data, and no personal claims.** Nothing about attitude, effort, diligence or capability, for the Team Lead or for any team member named in the risks.
 - **No invented data.** Every count, date, id and state comes from a tool call made during this request. Unknown is not zero.
-- **Read-only for work items.** Every recommendation here is text. Reassigning that unowned priority-1 item, unblocking an item or rebalancing a load all happen in Azure DevOps, by a human. Saved queries via `create_ado_query` are allowed.
+- **Read-only for work items.** Every recommendation here is text. Reassigning that unowned priority-1 item, unblocking an item or rebalancing a load all happen in Azure DevOps, by a human. Saved queries via `ado_query_work_items` are allowed.
 - **Respect the audit trail.** Do not work around it, and do not call `tl_purge_activity` on your own initiative.
 - **No credentials**, ever, including in quoted error messages. The trail is redacted by design; keep it that way in the output.
 
@@ -201,4 +199,4 @@ All of `_shared/safety-rules.md` applies. The points that bite hardest here:
 - "Show me anything I looked at more than once that is still open."
 - "Did I leave any emails unsent?"
 - "My trail is empty — does that mean I did nothing?" → no; it means the assistant was not used in that window. Offer the live-state sections instead.
-- "Review my activity, then draft a chase for the dependencies nobody has picked up." → this skill, then `team-email-assistant` (draft only; sending needs explicit confirmation).
+- "Review my activity and identify dependencies nobody has picked up." → this skill, then `dependency-analysis`.

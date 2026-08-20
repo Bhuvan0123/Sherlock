@@ -1,14 +1,14 @@
 import { parseAdoDate, startOfDay } from '../../utils/dates.js';
-import { describeRelation, RELATION } from '../azure-devops/fields.js';
-import { getSprintService, type SprintService } from '../azure-devops/sprint.service.js';
-import { getTeamService, type TeamService } from '../azure-devops/team.service.js';
+import { describeRelation, RELATION } from '../../azure-devops/fields.js';
+import { getSprintService, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getTeamService, type TeamService } from '../../azure-devops/team.service.js';
 import {
     getWorkItemService,
     relationTargetId,
     type BlockedWorkItem,
     type WorkItemService
-} from '../azure-devops/work-item.service.js';
-import type { WorkItem } from '../azure-devops/types.js';
+} from '../../azure-devops/work-item.service.js';
+import type { WorkItem } from '../../azure-devops/types.js';
 import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef } from './types.js';
 
 export interface DependencyEdge {

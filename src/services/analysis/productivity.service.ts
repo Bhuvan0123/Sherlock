@@ -1,8 +1,8 @@
 import { parseAdoDate, startOfDay } from '../../utils/dates.js';
-import { getAdoAnalyticsService, type AdoAnalyticsService, type DeliveryMetrics } from '../azure-devops/analytics.service.js';
-import { getSprintService, type Sprint, type SprintService } from '../azure-devops/sprint.service.js';
-import { getTeamService, type TeamService } from '../azure-devops/team.service.js';
-import { getWorkItemService, type WorkItemService } from '../azure-devops/work-item.service.js';
+import { getAdoAnalyticsService, type AdoAnalyticsService, type DeliveryMetrics } from '../../azure-devops/analytics.service.js';
+import { getSprintService, type Sprint, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getTeamService, type TeamService } from '../../azure-devops/team.service.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
 import { getWorkloadService, isSamePerson, type TeamWorkloadFacts, type WorkloadService } from './workload.service.js';
 import { buildEnvelope, type AnalysisEnvelope } from './types.js';
 

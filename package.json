@@ -1,14 +1,14 @@
 {
-  "name": "k4k-team-lead-assistant",
+  "name": "sherlock-mcp",
   "version": "1.0.0",
   "private": true,
-  "description": "K4K Team Lead Assistant - a read-only Azure DevOps intelligence MCP server with confirmation-gated email for the K4K Platform team lead.",
+  "description": "S.H.E.R.L.O.C.K. - Azure DevOps sprint health, risk, workload, and custom skill intelligence over MCP.",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
   },
   "bin": {
-    "k4k-team-lead-assistant": "dist/index.js"
+    "sherlock": "dist/index.js"
   },
   "main": "dist/index.js",
   "files": [
@@ -26,8 +26,9 @@
     "test:watch": "vitest",
     "test:security": "vitest run tests/security",
     "test:skills": "vitest run tests/skills",
-    "inspector": "mcp-inspector --config mcp-inspector.config.json --server k4k-team-lead-assistant",
-    "inspector:build": "npm run build && mcp-inspector --config mcp-inspector.config.json --server k4k-team-lead-assistant-dist",
+    "inspector": "mcp-inspector --config mcp-inspector.config.json --server sherlock",
+    "inspector:build": "npm run build && mcp-inspector --config mcp-inspector.config.json --server sherlock-dist",
+    "doctor": "tsx scripts/doctor.ts",
     "verify:live": "tsx scripts/verify-live.ts",
     "verify:readonly": "tsx scripts/verify-readonly.ts"
   },

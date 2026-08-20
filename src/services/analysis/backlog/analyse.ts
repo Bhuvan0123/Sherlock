@@ -1,6 +1,6 @@
-import type { WorkItem } from '../../azure-devops/types.js';
-import { RELATION } from '../../azure-devops/fields.js';
-import { relationTargetId } from '../../azure-devops/work-item.service.js';
+import type { WorkItem } from '../../../azure-devops/types.js';
+import { RELATION } from '../../../azure-devops/fields.js';
+import { relationTargetId } from '../../../azure-devops/work-item.service.js';
 import { checkHierarchy } from './hierarchy.js';
 import { checkCompletenessAndTypeQuality } from './completeness.js';
 import { checkDatesAndSchedule } from './dates.js';

@@ -1,11 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getConfig } from '../../../config/env.js';
-import { getAdoClient } from '../../../services/azure-devops/client.js';
-import { describeRelation } from '../../../services/azure-devops/fields.js';
-import { getSprintService } from '../../../services/azure-devops/sprint.service.js';
-import { getWorkItemService } from '../../../services/azure-devops/work-item.service.js';
-import { getTeamService } from '../../../services/azure-devops/team.service.js';
+import { getAdoClient } from '../../../azure-devops/client.js';
+import { describeRelation } from '../../../azure-devops/fields.js';
+import { getSprintService } from '../../../azure-devops/sprint.service.js';
+import { getWorkItemService } from '../../../azure-devops/work-item.service.js';
+import { getTeamService } from '../../../azure-devops/team.service.js';
 import { registerTool } from '../../tool-registry.js';
 
 const workItemId = z.number().int().positive().describe('Azure DevOps work-item id.');

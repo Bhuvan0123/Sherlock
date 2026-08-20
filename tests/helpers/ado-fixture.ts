@@ -10,7 +10,7 @@
  * Live verification against the real KEBS4KAAR / K4K / Platform project is a
  * separate, explicitly-run script (`npm run verify:live`).
  */
-import { FIELD, RELATION } from '../../src/services/azure-devops/fields.js';
+import { FIELD, RELATION } from '../../src/azure-devops/fields.js';
 
 export interface FixtureWorkItem {
     id: number;

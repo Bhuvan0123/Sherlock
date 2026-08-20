@@ -1,10 +1,20 @@
 import { parseAdoDate, startOfDay } from '../../utils/dates.js';
-import { getAdoAnalyticsService, type AdoAnalyticsService } from '../azure-devops/analytics.service.js';
-import { getSprintService, type Sprint, type SprintService } from '../azure-devops/sprint.service.js';
-import { getTeamService, type TeamMember, type TeamService } from '../azure-devops/team.service.js';
-import { getWorkItemService, type BlockedWorkItem, type WorkItemService } from '../azure-devops/work-item.service.js';
-import type { WorkItem } from '../azure-devops/types.js';
+import { getAdoAnalyticsService, type AdoAnalyticsService } from '../../azure-devops/analytics.service.js';
+import { getProjectContext } from '../../azure-devops/context.js';
+import { FIELD } from '../../azure-devops/fields.js';
+import { MINIMAL_WORK_ITEM_FIELDS, WORKLOAD_WORK_ITEM_FIELDS } from '../../azure-devops/field-profiles.js';
+import { getSprintService, type Sprint, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getTeamService, type TeamMember, type TeamService } from '../../azure-devops/team.service.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
+import type { WorkItem } from '../../azure-devops/types.js';
+import { wiql } from '../../azure-devops/wiql.js';
+import { OVERDUE_RULE, overdueRuleCount, type OverdueRuleCount } from './overdue.js';
 import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef } from './types.js';
+
+export interface WorkloadQueryOptions {
+    includeExamples?: boolean;
+    sampleLimit?: number;
+}
 
 export interface MemberWorkload {
     member: { displayName: string; email: string | null };
@@ -14,10 +24,13 @@ export interface MemberWorkload {
         proposed: number;
         blocked: number;
         overdue: number;
+        overdueDueDate: number;
+        overduePlannedEnd: number;
         dueThisWeek: number;
         highPriority: number;
         completedLast30Days: number;
         inCurrentSprint: number;
+        unassigned: number;
     };
     effort: { remainingHours: number | null; storyPointsOpen: number | null };
     /** Sprint capacity from Azure DevOps, when the team maintains capacity. */
@@ -35,7 +48,16 @@ export interface TeamWorkloadFacts {
     currentSprint: { name: string; path: string; daysRemaining: number | null } | null;
     members: MemberWorkload[];
     unassigned: { count: number; items: ItemRef[] };
-    totals: { openItems: number; activeItems: number; blockedItems: number; overdueItems: number };
+    totals: {
+        openItems: number;
+        activeItems: number;
+        blockedItems: number;
+        overdueItems: number;
+        overdueDueDate: number;
+        overduePlannedEnd: number;
+        unassignedItems: number;
+    };
+    overdueRules: OverdueRuleCount[];
     distribution: {
         openItemsPerMember: Record<string, number>;
         mean: number | null;
@@ -62,110 +84,71 @@ export class WorkloadService {
         private readonly analytics: AdoAnalyticsService = getAdoAnalyticsService()
     ) {}
 
-    /** Gathers the raw data every workload view needs, in one pass. */
-    private async collect(): Promise<{
-        members: TeamMember[];
-        open: WorkItem[];
-        blocked: BlockedWorkItem[];
-        completed: WorkItem[];
-        sprint: Sprint | null;
-        sprintItems: WorkItem[];
-        capacity: { member: string; capacityPerDay: number; daysOff: number }[] | null;
-    }> {
-        const [members, open, blocked, completed, sprint] = await Promise.all([
-            this.teams.getMembers(),
-            this.workItems.query([], { limit: 1000 }),
-            this.workItems.blocked({ limit: 300 }).catch(() => [] as BlockedWorkItem[]),
-            this.analytics.getCompletedWork(30, { limit: 500 }).catch(() => [] as WorkItem[]),
-            this.sprints.getCurrentSprint().catch(() => null)
-        ]);
-
-        const sprintItems = sprint ? await this.sprints.getSprintWorkItems(sprint).catch(() => []) : [];
-        const capacity = sprint ? await this.sprints.getCapacity(sprint).catch(() => null) : null;
-
-        return { members, open, blocked, completed, sprint, sprintItems, capacity };
+    private assigneeClause(member: TeamMember) {
+        return wiql.contains(FIELD.assignedTo, member.displayName);
     }
 
-    private buildMemberWorkload(
-        member: TeamMember,
-        data: {
-            open: WorkItem[];
-            blocked: BlockedWorkItem[];
-            completed: WorkItem[];
-            sprintItems: WorkItem[];
-            capacity: { member: string; capacityPerDay: number; daysOff: number }[] | null;
-        }
-    ): MemberWorkload {
-        const matches = (item: WorkItem): boolean => isSamePerson(item, member);
-        const today = startOfDay();
-        const weekEnd = startOfDay(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
+    private emptyItems(): MemberWorkload['items'] {
+        return { active: [], blocked: [], overdue: [], highPriority: [] };
+    }
 
-        const openItems = data.open.filter(matches);
-        const active = openItems.filter(item => item.stateCategory === 'InProgress');
-        const proposed = openItems.filter(item => item.stateCategory === 'Proposed');
-        const blocked = data.blocked.filter(matches);
-        const overdue = openItems.filter(item => {
-            const due = parseAdoDate(item.dueDate ?? item.targetDate);
+    async getMemberWorkload(memberQuery: string): Promise<MemberWorkload> {
+        const member = await this.teams.resolveMember(memberQuery);
+        const assigned = this.assigneeClause(member);
+        const [open, blocked] = await Promise.all([
+            this.workItems.query([assigned], { limit: 80, profile: WORKLOAD_WORK_ITEM_FIELDS }),
+            this.workItems.blocked({ limit: 20, includeDependencyBlockers: false }).catch(() => [])
+        ]);
+        const today = startOfDay();
+        const matches = (item: WorkItem) => isSamePerson(item, member);
+        const active = open.filter(item => item.stateCategory === 'InProgress');
+        const proposed = open.filter(item => item.stateCategory === 'Proposed');
+        const overdue = open.filter(item => {
+            const due = parseAdoDate(item.dueDate);
             return due !== null && startOfDay(due) < today;
         });
-        const dueThisWeek = openItems.filter(item => {
-            const due = parseAdoDate(item.dueDate ?? item.targetDate);
-            if (!due) return false;
-            const day = startOfDay(due);
-            return day >= today && day <= weekEnd;
+        const plannedEnd = open.filter(item => {
+            const end = parseAdoDate(item.plannedEnd ?? item.targetDate);
+            return end !== null && startOfDay(end) < today && !item.dueDate;
         });
-        const highPriority = openItems.filter(item => item.priority !== null && item.priority <= 2);
-
         let remainingHours: number | null = null;
-        for (const item of openItems) {
-            if (item.remainingWork === null) continue;
-            remainingHours = (remainingHours ?? 0) + item.remainingWork;
-        }
         let points: number | null = null;
-        for (const item of openItems) {
+        for (const item of open) {
+            if (item.remainingWork !== null) remainingHours = (remainingHours ?? 0) + item.remainingWork;
             const value = item.storyPoints ?? item.effort;
-            if (value === null) continue;
-            points = (points ?? 0) + value;
+            if (value !== null) points = (points ?? 0) + value;
         }
-
-        const capacityEntry = data.capacity?.find(
-            entry => entry.member.toLowerCase() === member.displayName.toLowerCase()
-        );
-
+        const mineBlocked = blocked.filter(matches);
         return {
             member: { displayName: member.displayName, email: member.email },
             counts: {
-                assignedOpen: openItems.length,
+                assignedOpen: open.length,
                 active: active.length,
                 proposed: proposed.length,
-                blocked: blocked.length,
+                blocked: mineBlocked.length,
                 overdue: overdue.length,
-                dueThisWeek: dueThisWeek.length,
-                highPriority: highPriority.length,
-                completedLast30Days: data.completed.filter(matches).length,
-                inCurrentSprint: data.sprintItems.filter(matches).length
+                overdueDueDate: overdue.length,
+                overduePlannedEnd: plannedEnd.length,
+                dueThisWeek: 0,
+                highPriority: open.filter(i => i.priority !== null && i.priority <= 2).length,
+                completedLast30Days: 0,
+                inCurrentSprint: 0,
+                unassigned: 0
             },
             effort: {
                 remainingHours: remainingHours === null ? null : round(remainingHours),
                 storyPointsOpen: points === null ? null : round(points)
             },
-            sprintCapacityHoursPerDay: capacityEntry ? round(capacityEntry.capacityPerDay) : null,
+            sprintCapacityHoursPerDay: null,
             items: {
-                active: active.map(toItemRef),
-                blocked: blocked.map(toItemRef),
-                overdue: overdue.map(toItemRef),
-                highPriority: highPriority.map(toItemRef)
+                active: active.slice(0, 8).map(toItemRef),
+                blocked: mineBlocked.slice(0, 5).map(toItemRef),
+                overdue: overdue.slice(0, 5).map(toItemRef),
+                highPriority: open.filter(i => i.priority !== null && i.priority <= 2).slice(0, 5).map(toItemRef)
             }
         };
     }
 
-    async getMemberWorkload(memberQuery: string): Promise<MemberWorkload> {
-        const member = await this.teams.resolveMember(memberQuery);
-        const data = await this.collect();
-        return this.buildMemberWorkload(member, data);
-    }
-
-    /** Work for a member, split into the categories a Team Lead actually asks about. */
     async getMemberWork(memberQuery: string): Promise<{
         member: { displayName: string; email: string | null };
         assigned: ItemRef[];
@@ -177,66 +160,158 @@ export class WorkloadService {
         currentSprintItems: ItemRef[];
     }> {
         const member = await this.teams.resolveMember(memberQuery);
-        const data = await this.collect();
+        const assignedClause = this.assigneeClause(member);
+        const [open, completed, blocked, sprint] = await Promise.all([
+            this.workItems.query([assignedClause], { limit: 80, profile: WORKLOAD_WORK_ITEM_FIELDS }),
+            this.analytics.getCompletedWork(30, { limit: 80 }).catch(() => [] as WorkItem[]),
+            this.workItems.blocked({ limit: 20, includeDependencyBlockers: false }).catch(() => []),
+            this.sprints.getCurrentSprint().catch(() => null)
+        ]);
         const matches = (item: WorkItem): boolean => isSamePerson(item, member);
         const today = startOfDay();
-
-        const openItems = data.open.filter(matches);
-        const carryOver: ItemRef[] = [];
-        if (data.sprint) {
-            const progress = await this.sprints.getSprintProgress(data.sprint).catch(() => null);
-            for (const entry of progress?.carryOver ?? []) {
-                const item = data.sprintItems.find(candidate => candidate.id === entry.id);
-                if (item && matches(item)) carryOver.push(toItemRef(item));
-            }
-        }
+        const sprintItems = sprint
+            ? await this.workItems.query([assignedClause, wiql.under(FIELD.iterationPath, sprint.path)], {
+                  includeCompleted: true,
+                  limit: 80,
+                  profile: MINIMAL_WORK_ITEM_FIELDS
+              })
+            : [];
 
         return {
             member: { displayName: member.displayName, email: member.email },
-            assigned: openItems.map(toItemRef),
-            active: openItems.filter(item => item.stateCategory === 'InProgress').map(toItemRef),
-            completedLast30Days: data.completed.filter(matches).map(toItemRef),
-            overdue: openItems
+            assigned: open.map(toItemRef),
+            active: open.filter(item => item.stateCategory === 'InProgress').map(toItemRef),
+            completedLast30Days: completed.filter(matches).map(toItemRef),
+            overdue: open
                 .filter(item => {
-                    const due = parseAdoDate(item.dueDate ?? item.targetDate);
+                    const due = parseAdoDate(item.dueDate);
                     return due !== null && startOfDay(due) < today;
                 })
                 .map(toItemRef),
-            blocked: data.blocked
-                .filter(matches)
-                .map(item => ({ item: toItemRef(item), signals: item.blockedSignals.map(signal => signal.evidence) })),
-            carryOverInCurrentSprint: carryOver,
-            currentSprintItems: data.sprintItems.filter(matches).map(toItemRef)
+            blocked: blocked.filter(matches).map(item => ({
+                item: toItemRef(item),
+                signals: item.blockedSignals.map(signal => signal.evidence)
+            })),
+            carryOverInCurrentSprint: [],
+            currentSprintItems: sprintItems.map(toItemRef)
         };
     }
 
-    async getTeamWorkloadFacts(): Promise<TeamWorkloadFacts> {
-        const data = await this.collect();
-        const team = await this.teams.getConfiguredTeam();
+    async getTeamWorkloadFacts(options: WorkloadQueryOptions = {}): Promise<TeamWorkloadFacts> {
+        const includeExamples = options.includeExamples === true;
+        const sampleLimit = Math.max(0, Math.min(options.sampleLimit ?? 3, 8));
+        const ctx = getProjectContext();
+        const [members, inProgressStates, proposedStates, team, sprint, blockedIds, overdueDueIds, overduePlannedIds, unassignedIds] =
+            await Promise.all([
+                this.teams.getMembers(),
+                ctx.getInProgressStateNames(),
+                ctx.getProposedStateNames(),
+                this.teams.getConfiguredTeam(),
+                this.sprints.getCurrentSprint().catch(() => null),
+                this.workItems.blockedSignalIds({ limit: 200 }),
+                this.workItems.overdueDueDateIds({ limit: 200 }),
+                this.workItems.plannedEndOverdueIds({ limit: 200 }),
+                this.workItems.unassignedIds({ limit: 200 })
+            ]);
 
-        const members = data.members.map(member => this.buildMemberWorkload(member, data));
-        const unassigned = data.open.filter(item => !item.assignedTo);
+        const dueField = await this.workItems.dueDateField();
+        const blockedClause = await this.workItems.blockedSignalCondition();
+        const sprintIds = sprint
+            ? await this.workItems.queryIds([wiql.under(FIELD.iterationPath, sprint.path)], {
+                  includeCompleted: true,
+                  limit: 200
+              })
+            : [];
+        const sprintSample =
+            sprintIds.length > 0
+                ? await this.workItems.getByIds(sprintIds.slice(0, 80), { profile: MINIMAL_WORK_ITEM_FIELDS })
+                : [];
+        const overdueSample =
+            overdueDueIds.length > 0 && overdueDueIds.length <= 30
+                ? await this.workItems.getByIds(overdueDueIds, { profile: MINIMAL_WORK_ITEM_FIELDS })
+                : [];
+        const blockedSample =
+            blockedIds.length > 0 && blockedIds.length <= 20
+                ? await this.workItems.getByIds(blockedIds, { profile: MINIMAL_WORK_ITEM_FIELDS })
+                : [];
 
-        const counts = members.map(entry => entry.counts.assignedOpen);
+        const rows = await Promise.all(
+            members.map(async (member): Promise<MemberWorkload> => {
+                const assigned = this.assigneeClause(member);
+                const [activeIds, proposedIds] = await Promise.all([
+                    inProgressStates.length
+                        ? this.workItems.queryIds([assigned, wiql.inList(FIELD.state, inProgressStates)], { limit: 500 })
+                        : Promise.resolve([] as number[]),
+                    proposedStates.length
+                        ? this.workItems.queryIds([assigned, wiql.inList(FIELD.state, proposedStates)], { limit: 500 })
+                        : Promise.resolve([] as number[])
+                ]);
+                const name = member.displayName.toLowerCase();
+                const memberOverdue = overdueSample.filter(i => i.assignedTo?.toLowerCase() === name).length;
+                const memberBlocked = blockedSample.filter(i => i.assignedTo?.toLowerCase() === name).length;
+                const inSprint = sprintSample.filter(i => i.assignedTo?.toLowerCase() === name).length;
+                let items = this.emptyItems();
+                if (includeExamples) {
+                    const sampleIds = activeIds.slice(0, sampleLimit);
+                    const bodies = await this.workItems.getByIds(sampleIds, { profile: MINIMAL_WORK_ITEM_FIELDS });
+                    items = { ...this.emptyItems(), active: bodies.map(toItemRef) };
+                }
+                return {
+                    member: { displayName: member.displayName, email: member.email },
+                    counts: {
+                        assignedOpen: activeIds.length + proposedIds.length,
+                        active: activeIds.length,
+                        proposed: proposedIds.length,
+                        blocked: memberBlocked,
+                        overdue: memberOverdue,
+                        overdueDueDate: memberOverdue,
+                        overduePlannedEnd: 0,
+                        dueThisWeek: 0,
+                        highPriority: 0,
+                        completedLast30Days: 0,
+                        inCurrentSprint: inSprint,
+                        unassigned: 0
+                    },
+                    effort: { remainingHours: null, storyPointsOpen: null },
+                    sprintCapacityHoursPerDay: null,
+                    items
+                };
+            })
+        );
+
+        const unassignedItems =
+            includeExamples || unassignedIds.length <= 3
+                ? (await this.workItems.getByIds(unassignedIds.slice(0, Math.max(sampleLimit, unassignedIds.length <= 3 ? 3 : 0)), {
+                      profile: MINIMAL_WORK_ITEM_FIELDS
+                  })).map(toItemRef)
+                : [];
+
+        const openItems = rows.reduce((sum, row) => sum + row.counts.assignedOpen, 0) + unassignedIds.length;
+        const activeItems = rows.reduce((sum, row) => sum + row.counts.active, 0);
+        const counts = rows.map(entry => entry.counts.assignedOpen);
         const openItemsPerMember: Record<string, number> = {};
-        for (const entry of members) openItemsPerMember[entry.member.displayName] = entry.counts.assignedOpen;
+        for (const entry of rows) openItemsPerMember[entry.member.displayName] = entry.counts.assignedOpen;
 
         return {
             team: team.name,
-            currentSprint: data.sprint
-                ? { name: data.sprint.name, path: data.sprint.path, daysRemaining: data.sprint.daysRemaining }
+            currentSprint: sprint
+                ? { name: sprint.name, path: sprint.path, daysRemaining: sprint.daysRemaining }
                 : null,
-            members,
-            unassigned: { count: unassigned.length, items: unassigned.map(toItemRef) },
+            members: rows,
+            unassigned: { count: unassignedIds.length, items: unassignedItems },
             totals: {
-                openItems: data.open.length,
-                activeItems: data.open.filter(item => item.stateCategory === 'InProgress').length,
-                blockedItems: data.blocked.length,
-                overdueItems: data.open.filter(item => {
-                    const due = parseAdoDate(item.dueDate ?? item.targetDate);
-                    return due !== null && startOfDay(due) < startOfDay();
-                }).length
+                openItems,
+                activeItems,
+                blockedItems: blockedIds.length,
+                overdueItems: overdueDueIds.length,
+                overdueDueDate: overdueDueIds.length,
+                overduePlannedEnd: overduePlannedIds.length,
+                unassignedItems: unassignedIds.length
             },
+            overdueRules: [
+                overdueRuleCount('due-date', overdueDueIds.length),
+                overdueRuleCount('planned-end', overduePlannedIds.length)
+            ],
             distribution: buildDistribution(openItemsPerMember, counts)
         };
     }
@@ -314,9 +389,10 @@ export class WorkloadService {
             concerns,
             recommendations,
             methodology: [
-                'Open items: work items in the team\'s area paths whose state category is Proposed or InProgress.',
-                'Overdue: an open item whose DueDate (or TargetDate when DueDate is unused) is earlier than today.',
-                'Blocked: detected from state, tags, the Blocked field, or an unfinished predecessor link - each with evidence.',
+                'Open items: work items in the team\'s area paths whose state category is Proposed or InProgress (WIQL counts, not full bodies).',
+                `${OVERDUE_RULE.dueDate.label}: ${OVERDUE_RULE.dueDate.description}`,
+                `${OVERDUE_RULE.plannedEnd.label}: ${OVERDUE_RULE.plannedEnd.description}`,
+                'Blocked: WIQL on blocked state/tags/field. Predecessor-link scans are not used for team workload counts.',
                 'Imbalance is flagged when the busiest member holds at least twice the team median open items AND at least 4 more than the lightest member.',
                 'Completed counts cover the last 30 days of Completed/Resolved state changes.'
             ]

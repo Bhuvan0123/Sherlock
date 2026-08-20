@@ -1,9 +1,10 @@
 import { READ_ONLY_REFUSAL_MESSAGE } from '../../security/read-only-policy.js';
-import { getAdoAnalyticsService, type AdoAnalyticsService } from '../azure-devops/analytics.service.js';
-import { getSprintService, type SprintService } from '../azure-devops/sprint.service.js';
-import { getTeamService, type TeamMember, type TeamService } from '../azure-devops/team.service.js';
-import { getWorkItemService, type WorkItemService } from '../azure-devops/work-item.service.js';
-import type { WorkItem } from '../azure-devops/types.js';
+import { getAdoAnalyticsService, type AdoAnalyticsService } from '../../azure-devops/analytics.service.js';
+import { getSprintService, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getTeamService, type TeamMember, type TeamService } from '../../azure-devops/team.service.js';
+import { MINIMAL_WORK_ITEM_FIELDS } from '../../azure-devops/field-profiles.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
+import type { WorkItem } from '../../azure-devops/types.js';
 import { getWorkloadService, isSamePerson, type MemberWorkload, type WorkloadService } from './workload.service.js';
 import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef } from './types.js';
 
@@ -61,7 +62,7 @@ export class AssignmentService {
 
     /** Historical completions used to judge familiarity with similar work. */
     private async getExperienceBase(): Promise<WorkItem[]> {
-        return await this.analytics.getCompletedWork(EXPERIENCE_WINDOW_DAYS, { limit: 1000 }).catch(() => []);
+        return await this.analytics.getCompletedWork(EXPERIENCE_WINDOW_DAYS, { limit: 80 }).catch(() => []);
     }
 
     private scoreCandidate(
@@ -170,7 +171,7 @@ export class AssignmentService {
         const [target, members, workloadFacts, history] = await Promise.all([
             this.workItems.getById(workItemId),
             this.teams.getMembers(),
-            this.workload.getTeamWorkloadFacts(),
+            this.workload.getTeamWorkloadFacts({ includeExamples: false }),
             this.getExperienceBase()
         ]);
 
@@ -244,13 +245,13 @@ export class AssignmentService {
             actionRequired: string;
         }>
     > {
-        const [unassigned, members, workloadFacts, history, currentSprint] = await Promise.all([
-            this.workItems.unassigned({ limit: 200 }),
+        const [unassigned, members, workloadFacts, currentSprint] = await Promise.all([
+            this.workItems.unassigned({ limit: Math.max(1, Math.min(limit, 10)), profile: MINIMAL_WORK_ITEM_FIELDS }),
             this.teams.getMembers(),
-            this.workload.getTeamWorkloadFacts(),
-            this.getExperienceBase(),
+            this.workload.getTeamWorkloadFacts({ includeExamples: false }),
             this.sprints.getCurrentSprint().catch(() => null)
         ]);
+        const history: WorkItem[] = [];
 
         // Prioritise: current sprint first, then by priority, then by due date.
         const ranked = [...unassigned].sort((a, b) => {

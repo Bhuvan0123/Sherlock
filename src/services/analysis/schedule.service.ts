@@ -1,5 +1,5 @@
 import { parseAdoDate, businessDaysBetween, daysBetween } from '../../utils/dates.js';
-import type { WorkItem } from '../azure-devops/types.js';
+import type { WorkItem } from '../../azure-devops/types.js';
 
 export interface ScheduleVariance {
     plannedDurationDays: number | null;

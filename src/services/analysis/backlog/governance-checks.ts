@@ -1,6 +1,6 @@
 import { daysBetween, parseAdoDate } from '../../../utils/dates.js';
-import { RELATION } from '../../azure-devops/fields.js';
-import { relationTargetId } from '../../azure-devops/work-item.service.js';
+import { RELATION } from '../../../azure-devops/fields.js';
+import { relationTargetId } from '../../../azure-devops/work-item.service.js';
 import type { BacklogContext, Finding } from './types.js';
 import { estimateOf, isComplete, isIntentionallyWaiting, isOpen, typeKind } from './classify.js';
 

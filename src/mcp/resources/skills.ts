@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getSharedRules, getSkills, toIndexEntry } from '../../skills/loader.js';
+import { getSharedRules, getSkills, toIndexEntry } from '../../skills/registry.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('mcp-skill-resources');

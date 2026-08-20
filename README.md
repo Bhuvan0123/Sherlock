@@ -1,108 +1,134 @@
-# KaarPulse
+# S.H.E.R.L.O.C.K.
 
-KaarPulse is an intelligent Team Lead decision-support assistant running via MCP. It connects to Azure DevOps and provides read-only analytical insights (plus optional saved-query creation) to help you identify risks, schedule variances, structural backlog issues, and unassigned work.
+Sprint Health, Execution, Risk, Logistics, Operations & Coordination Knowledge
 
-## Core Philosophy
+## What Is S.H.E.R.L.O.C.K.?
 
-- **Work items stay read-only.** KaarPulse never creates, updates, assigns or closes Azure DevOps work items.
-- **Saved queries are allowed.** When a skill finds a category with more than three items, it creates or reuses a saved Boards query via `create_ado_query` and returns the real navigation URL.
-- **Actionable visuals.** Outputs follow a dashboard: *what is happening → why it matters → what I recommend → what you can do next*, with query links as evidence.
-- **Decision support.** Recommendations and options are generated; the Team Lead remains the decision maker.
+S.H.E.R.L.O.C.K. is an MCP server for Azure DevOps team intelligence. It reads the configured organization, project and team, runs sprint/backlog/workload/risk analysis, creates recommendations, and can create or reuse controlled Azure DevOps saved queries for evidence.
 
-## Skills
+## Key Features
 
-Skills are the core workflows that KaarPulse can run. You can invoke them using natural language. See [docs/skills.md](docs/skills.md).
+- Azure DevOps sprint, backlog, deadline, dependency, workload and project-health analysis.
+- Built-in skills plus persisted custom skills with `brief`, `verbose` and `visual` modes.
+- Azure DevOps work-item read-only security with controlled saved-query creation.
+- Team-scoped saved queries under `My Queries/{ADO_TEAM}`.
+- Local SQLite persistence for audit activity and custom skills.
+- Health check and `npm run doctor` diagnostics.
 
-### Core Governance & Health
+## Architecture
 
-- **`team-morning-brief`**: Morning command-center view and TL priority queue.
-- **`project-health-analysis`**: Delivery, schedule, workload, backlog, dependencies, data quality, sprint — with *why*, not only a score.
-- **`sprint-health-analysis`**: Current sprint progress, risks, and sprint-scoped queries.
-- **`backlog-data-quality`**: Broad backlog governance (hierarchy, fields, dates, ownership, stale work, duplicates, dependencies, custom fields); one saved query per category with count > 3.
-- **`schedule-variance-analysis`**: Planned vs actual duration, late starts and completions.
-- **`hierarchy-health-analysis`**: Epic → Feature → Story → Task orphans and empty parents.
-- **`dependency-analysis`**: Blocked work, chains, cross-team waits, highest-impact blocker.
-- **`stale-work-analysis`**: Active work stale 7 / 14 / 30+ days.
-- **`delivery-forecast`**: Honest outlook when history exists; otherwise explains why a forecast is unavailable.
+MCP clients call the MCP tool layer, which routes into the Skill Executor, Analysis Module Registry, Data Aggregator, Cache Manager, Query Engine, Navigation Engine, Recommendation Engine and Azure DevOps layer. See `docs/ARCHITECTURE.md`.
 
-### Productivity & Planning
+## Requirements
 
-- **`workload-analysis`**: Team workload distribution and capacity (not a performance ranking).
-- **`deadline-risk-analysis`**: Overdue, due soon, missing dates, deadline risk categories.
-- **`team-productivity-review`**: Throughput and trends without ranking people by task count.
-- **`tl-productivity-review`**: Team Lead coverage and follow-through from the local audit trail.
-- **`work-assignment-recommendation`**: Who could take an item — recommendation only, never an assignment.
+- Node.js 22.5 or newer.
+- An Azure DevOps organization, project and team.
+- An Azure DevOps PAT with the minimum read/query permissions needed by your enabled workflows.
 
-### Communication
+## Installation
 
-- **`team-email-assistant`**: Drafts emails from measured data; may attach a saved-query link; sends only after explicit confirmation.
-- **`daily-team-report`**: Keepable daily dashboard with queries for large groups.
-- **`weekly-team-review`**: Weekly planned vs actual, recurring problems, next-week actions.
-
-## MCP Tools
-
-### Azure DevOps Access (`ado_*`)
-- `ado_get_project_overview`, `ado_get_project_teams`, `ado_get_team_members`
-- `ado_get_work_item`, `ado_get_work_items`, `ado_query_work_items`
-- `ado_get_work_item_fields`, `ado_get_field_mapping`
-- `ado_get_blocked_items`, `ado_get_overdue_items`, sprint and backlog reads
-
-### Analytics (`analysis_*`)
-- `analysis_project_health`, `analysis_team_productivity`, `analysis_deadline_risk`
-- `analysis_backlog_quality`, `analysis_schedule_variance`, `analysis_hierarchy_health`, `analysis_stale_work`
-- Workload, assignment, dependency and daily-review composites
-
-### Email
-- `email_draft*` tools create a draft only
-- `email_send_confirmed` sends after explicit confirmation
-
-### Query Management (`create_ado_query`)
-
-Creates a saved Azure DevOps Boards query from validated WIQL. Does not modify work items.
-
-**Input (main fields):** `project` (optional, defaults to configured project), `queryName`, `queryDescription`, `wiql`, `columns`, `parentPath` (optional, defaults to `My Queries/KaarFlow`).
-
-**Output:** `queryId`, `resultCount`, `fieldsIncluded`, `savedQueryUrl`, `navigationUrl`. If the title already exists, returns `QUERY_ALREADY_EXISTS` with `existingQueryUrl` / `savedQueryUrl` and `resultCount` for reuse.
-
-See [docs/query-engine.md](docs/query-engine.md) and [docs/query-fields.md](docs/query-fields.md).
-
-**Architecture:**
-
-```mermaid
-flowchart TD
-    User([Team Lead / Claude]) --> Agent[KaarPulse assistant]
-    Agent --> MCP[Local KaarPulse MCP]
-    subgraph Local MCP
-        Read[ado_query_work_items / analysis_*]
-        Tool[create_ado_query]
-        Tool --> Validate[WIQL Validation]
-        Validate -- Valid --> API[Azure DevOps REST API]
-    end
-    subgraph Azure DevOps
-        API --> QueryWiql[POST /_apis/wit/wiql]
-        QueryWiql -.-> Count[Result Count]
-        API --> CreateQuery[POST /_apis/wit/queries]
-        CreateQuery -.-> QueryMeta[Query Metadata]
-    end
-    Count & QueryMeta --> URL[Navigation URL]
-    URL --> Response[KaarPulse dashboard]
-    Response --> Agent
-    Agent --> User
+```bash
+npm install
+cp .env.example .env
+npm run doctor
+npm run build
 ```
 
-## Count > 3 rule
+On Windows PowerShell, use `Copy-Item .env.example .env`.
 
-Skills group work items into categories. Categories with more than three items get a saved query and a clickable Open Query link. Smaller sets are listed in the chat.
+## Configuration
 
-## Security & Permissions
+Edit `.env`:
 
-Analytical tools are read-only. `create_ado_query` is the only Azure DevOps write, and it writes query metadata only. Confirmed email sending is the only outbound message send. No PATs, secrets, or headers are exposed to the LLM.
+```env
+ADO_ORGANIZATION=your_organization
+ADO_PROJECT=your_project
+ADO_TEAM=your_team
+ADO_PAT=your_personal_access_token
+SHERLOCK_ENV=development
+LOG_LEVEL=info
+TOKEN_DEBUG=false
+```
 
-## Getting Started
+The sample values in `.env.example` are examples only. Runtime source code does not hardcode an organization, project or team.
 
-Ask "Show me the morning brief" or "Check backlog data quality" to see KaarPulse in action.
+## Azure DevOps PAT
 
-## Testing
+Never commit `.env` or paste a PAT into chat, docs, query names or tool inputs. S.H.E.R.L.O.C.K. masks known credentials in logs and tool responses and never stores the PAT in SQLite.
 
-- `npm test` — unit and MCP contract tests, including the skill catalogue.
-- `npm run inspector` — MCP Inspector for live tool calls (overdue, missing dates, stale, unassigned, sprint, high priority, query create).
+## Running The MCP
+
+```bash
+npm run build
+npm run start
+```
+
+## Claude Code Setup
+
+```json
+{
+  "mcpServers": {
+    "sherlock": {
+      "command": "node",
+      "args": ["/absolute/path/to/sherlock/dist/index.js"]
+    }
+  }
+}
+```
+
+## Claude Desktop Setup
+
+Add the same `mcpServers.sherlock` block to your Claude Desktop MCP configuration file, using an absolute path to `dist/index.js`.
+
+## Cursor Setup
+
+Add the same server block to your Cursor MCP configuration, or run from this repository with `npm run inspector` for local validation.
+
+## Kiro Setup
+
+Configure an MCP server named `sherlock` with command `node` and args pointing to `/absolute/path/to/sherlock/dist/index.js`.
+
+## MCP Inspector
+
+```bash
+npm run build
+npm run inspector
+```
+
+Verify `sherlock_health_check`, `skill_execute`, custom skill tools, ADO reads and `create_ado_query`.
+
+## Available Skills
+
+Core skills include `daily-standup-starter`, `team-morning-brief`, `sprint-health-analysis`, `project-health-analysis`, `workload-analysis`, `deadline-risk-analysis`, `dependency-analysis`, `backlog-data-quality`, `stale-work-analysis`, `delivery-forecast`, `weekly-team-review` and `work-assignment-recommendation`.
+
+## Custom Skills
+
+Use the custom skill tools to create, preview, confirm, save, list, update, duplicate, enable, disable, remove, compose and execute custom skills. Custom skills remain organization/project/team independent and support `brief`, `verbose` and `visual`.
+
+## Security Model
+
+S.H.E.R.L.O.C.K. v1 does not create, update, delete, assign or modify Azure DevOps work items. It can read Azure DevOps data, execute WIQL, create/reuse controlled saved queries, perform analysis, create recommendations and manage local custom skills.
+
+Generated saved queries are stored under `My Queries/{ADO_TEAM}`. Changing `ADO_TEAM=Development` stores/reuses queries under `My Queries/Development`.
+
+## Troubleshooting
+
+Run `npm run doctor` first. Common issues are missing PAT, invalid PAT, inaccessible organization/project, team not found, stale MCP process, unrebuilt `dist`, SQLite path problems and MCP Inspector config mistakes.
+
+## Development
+
+```bash
+npm run build
+npm run test
+npx vitest run
+```
+
+Live Azure DevOps verification should be opt-in and must not be required in CI.
+
+## Roadmap
+
+V1 is focused on Azure DevOps, team/sprint intelligence, read-only work-item analysis, controlled query creation, custom skills and MCP. Email and additional platform adapters may be considered for a future V2.
+
+## License
+
+No license file is currently included. A license decision is required before public distribution.

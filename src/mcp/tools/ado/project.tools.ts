@@ -2,12 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getConfig } from '../../../config/env.js';
 import { READ_ONLY_POST_ENDPOINTS, READ_ONLY_REFUSAL_MESSAGE } from '../../../security/read-only-policy.js';
-import { getAdoClient } from '../../../services/azure-devops/client.js';
-import { getProjectContext } from '../../../services/azure-devops/context.js';
-import { FieldMappingService } from '../../../services/azure-devops/field-mapping.js';
-import { getProjectService } from '../../../services/azure-devops/project.service.js';
-import { getSprintService } from '../../../services/azure-devops/sprint.service.js';
-import { getTeamService } from '../../../services/azure-devops/team.service.js';
+import { getAdoClient } from '../../../azure-devops/client.js';
+import { getProjectContext } from '../../../azure-devops/context.js';
+import { FieldMappingService } from '../../../azure-devops/field-mapping.js';
+import { getProjectService } from '../../../azure-devops/project.service.js';
+import { getSprintService } from '../../../azure-devops/sprint.service.js';
+import { getTeamService } from '../../../azure-devops/team.service.js';
 import { registerTool } from '../../tool-registry.js';
 
 /** Project, team, member and iteration reads. All GET-only against Azure DevOps. */

@@ -21,13 +21,13 @@ supporting_tools:
   - ado_get_work_item
   - ado_query_work_items
   - ado_get_field_mapping
-  - create_ado_query
+  - ado_query_work_items
 missing_capabilities:
   - "Azure DevOps exposes no burndown series through this server, so a daily burndown curve cannot be drawn - only the current snapshot."
   - "Scope change is only visible as evidence-based carry-over and mid-sprint additions; items removed from the sprint or silently rescoped cannot be detected."
   - "There is no leave or availability calendar, so configured capacity cannot be adjusted for who is actually present."
   - "No sprint goal or commitment record is available, so progress cannot be judged against a stated goal."
-  - "There is no saved-query discovery tool. Equivalent queries are reused only when create_ado_query returns QUERY_ALREADY_EXISTS for the same predictable title."
+  - "There is no saved-query discovery tool. Equivalent queries are reused only when ado_query_work_items returns QUERY_ALREADY_EXISTS for the same predictable title."
 triggers:
   - how is the sprint going
   - sprint health
@@ -108,7 +108,7 @@ All data comes from KaarPulse MCP tools. There are no other sources.
 9. **Call `analysis_team_productivity`** when history is wanted. It returns the sprint completion trend, carry-over and mid-sprint additions across recent sprints as measured values, and deliberately produces no single productivity score.
 10. **Compute only what the data supports.** Completion percentage from the counts the tool returned, remaining effort only where remaining hours or points are set, carry-over only from the evidence-based figure. Say which items were excluded from any effort figure and how many.
 11. **Assemble the five sections** in the order given in Output Format, then close with the read-only statement.
-12. **Sprint-scoped queries** for groups with count > 3 via `create_ado_query`: `Current Sprint - Overdue Work`, `Current Sprint - Blocked Work`, `Current Sprint - Unfinished High Priority`, `Current Sprint - Missing Estimates`, `Current Sprint - Schedule Variance`. Include a sprint board link from `ado_get_sprint_progress` / iteration URL fields **only if the tool returned one**. Never construct a sprint URL. Follow `_shared/query-workflow.md`.
+12. **Sprint-scoped queries** for groups with count > 3 via `ado_query_work_items`: `Current Sprint - Overdue Work`, `Current Sprint - Blocked Work`, `Current Sprint - Unfinished High Priority`, `Current Sprint - Missing Estimates`, `Current Sprint - Schedule Variance`. Include a sprint board link from `ado_get_sprint_progress` / iteration URL fields **only if the tool returned one**. Never construct a sprint URL. Follow `_shared/query-workflow.md`.
 
 If `ado_get_sprint_progress` fails, fall back to `ado_get_work_items_by_sprint` plus `ado_get_team_iterations` for the counts and dates, and say the points, capacity and carry-over figures are unavailable.
 
@@ -125,6 +125,9 @@ If `ado_get_sprint_progress` fails, fall back to `ado_get_work_items_by_sprint` 
 **Capacity signals are signals.** Configured sprint capacity is a number a human entered on the iteration; it does not know about leave, meetings or support duty. Compare remaining hours against capacity only where both are set, present the result as a signal, and never conclude that a member is overcommitted from item counts alone.
 
 ## Output Format
+
+**Output Mode**: The user may request a specific output mode (e.g. `brief`, `verbose`, `visual`). You must adapt your formatting to match the requested mode.
+
 
 Follow the KaarPulse Dashboard UI schema defined in `_shared/output-format.md`.
 Use the templates from `_shared/templates/` to construct the response.
@@ -161,7 +164,7 @@ Use the templates from `_shared/templates/` to construct the response.
 
 All of `_shared/safety-rules.md` applies. The points that bite most often here:
 
-- **Read-only for work items.** Sprint scope, dates, states and assignments cannot be changed here. Every run ends stating no work items were modified. Saved queries via `create_ado_query` are allowed.
+- **Read-only for work items.** Sprint scope, dates, states and assignments cannot be changed here. Every run ends stating no work items were modified. Saved queries via `ado_query_work_items` are allowed.
 - **No fabricated forecast.** Velocity, burndown projections and completion dates are forbidden unless a tool actually returned them, and none of these tools does. Saying "not calculated" with the reason is the correct answer.
 - **Unknown is not zero.** Unset points, unset capacity, unset iteration dates and a missing due-date field are each reported as what they are.
 - **No performance judgements.** Low completion is a fact about the sprint, not about the team. Offer the innocent explanations — large items, blocked dependencies, mid-sprint additions, absence.

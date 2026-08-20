@@ -1,12 +1,12 @@
 import { toDateOnly } from '../../utils/dates.js';
-import { getSprintService, type SprintProgress, type SprintService } from '../azure-devops/sprint.service.js';
-import { getWorkItemService, type WorkItemService } from '../azure-devops/work-item.service.js';
+import { MINIMAL_WORK_ITEM_FIELDS } from '../../azure-devops/field-profiles.js';
+import { getSprintService, type SprintProgress, type SprintService } from '../../azure-devops/sprint.service.js';
+import { getWorkItemService, type WorkItemService } from '../../azure-devops/work-item.service.js';
 import { getAssignmentService, type AssignmentService } from './assignment.service.js';
 import { getDeadlineService, type DeadlineItem, type DeadlineService } from './deadline.service.js';
-import { getDependencyService, type DependencyService } from './dependency.service.js';
-import { getProjectAnalysisService, type ProjectAnalysisService, type ProjectHealth } from './project-analysis.service.js';
+import { OVERDUE_RULE } from './overdue.js';
 import { getWorkloadService, type WorkloadService } from './workload.service.js';
-import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef } from './types.js';
+import { buildEnvelope, toItemRef, type AnalysisEnvelope, type ItemRef, type HealthRating } from './types.js';
 
 export interface DailyTeamReviewFacts {
     date: string;
@@ -28,46 +28,83 @@ export interface DailyTeamReviewFacts {
     highPriorityWork: ItemRef[];
     upcomingDeadlines: DeadlineItem[];
     unassignedWork: ItemRef[];
-    teamWorkload: { member: string; open: number; active: number; overdue: number; blocked: number }[];
-    health: ProjectHealth;
+    teamWorkload: { member: string; open: number; active: number; proposed: number; overdue: number; blocked: number }[];
+    overdueRules: { label: string; count: number }[];
+    health: { overall: HealthRating; dimensions: Record<string, { rating: HealthRating; reasons: string[] }> };
     suggestedAssignments: { workItem: ItemRef; suggested: string | null; reasons: string[] }[];
+    kpis: {
+        active: number;
+        proposed: number;
+        blocked: number;
+        overdueDueDate: number;
+        overduePlannedEnd: number;
+        unassigned: number;
+        completion: number | null;
+    };
+    overdueDueDateIds: number[];
+    overduePlannedEndIds: number[];
+    unassignedIds: number[];
 }
 
-/**
- * The daily stand-up view: everything a Team Lead needs to run a morning review,
- * in one call.
- *
- * Facts come from Azure DevOps. Risks, follow-ups and suggested assignment changes
- * are generated analysis, and the server cannot apply any of them.
- */
 export class ReviewService {
     constructor(
         private readonly sprints: SprintService = getSprintService(),
         private readonly workItems: WorkItemService = getWorkItemService(),
         private readonly deadlines: DeadlineService = getDeadlineService(),
         private readonly workload: WorkloadService = getWorkloadService(),
-        private readonly dependencies: DependencyService = getDependencyService(),
-        private readonly projectAnalysis: ProjectAnalysisService = getProjectAnalysisService(),
         private readonly assignments: AssignmentService = getAssignmentService()
     ) {}
 
     async generateDailyTeamReview(): Promise<AnalysisEnvelope<DailyTeamReviewFacts>> {
-        const [sprint, deadlineFacts, blockedAnalysis, unassigned, highPriority, recentlyChanged, workloadFacts, healthData] =
+        const [sprint, deadlineFacts, workloadFacts, blockedIds, unassignedIds, highPriorityIds, recentIds] =
             await Promise.all([
                 this.sprints.getCurrentSprint().catch(() => null),
-                this.deadlines.getDeadlineFacts(14),
-                this.dependencies.findBlockedItems(200).catch(() => null),
-                this.workItems.unassigned({ limit: 100 }).catch(() => []),
-                this.workItems.highPriority(2, { limit: 100 }).catch(() => []),
-                this.workItems.recentlyChanged(1, { limit: 100 }).catch(() => []),
-                this.workload.getTeamWorkloadFacts(),
-                this.projectAnalysis.collectFacts()
+                this.deadlines.getDeadlineFacts(14, { sampleLimit: 5 }),
+                this.workload.getTeamWorkloadFacts({ includeExamples: false }),
+                this.workItems.blockedSignalIds({ limit: 200 }),
+                this.workItems.unassignedIds({ limit: 200 }),
+                this.workItems.highPriorityIds(2, { limit: 200 }).catch(() => [] as number[]),
+                this.workItems.recentlyChangedIds(1, { limit: 50 }).catch(() => [] as number[])
             ]);
 
-        const progress: SprintProgress | null = sprint ? await this.sprints.getSprintProgress(sprint).catch(() => null) : null;
-        const health = this.projectAnalysis.rate(healthData.facts);
-        const inProgress = workloadFacts.members.flatMap(member => member.items.active);
-        const assignmentSuggestions = unassigned.length > 0 ? await this.assignments.recommendAssignments(5).catch(() => null) : null;
+        const progress: SprintProgress | null = sprint
+            ? await this.sprints.getSprintProgress(sprint, { includeCarryOver: false }).catch(() => null)
+            : null;
+
+        const sample = async (ids: number[], n: number) =>
+            (await this.workItems.getByIds(ids.slice(0, n), { profile: MINIMAL_WORK_ITEM_FIELDS })).map(toItemRef);
+
+        const blockedSample =
+            blockedIds.length <= 3
+                ? await this.workItems.blocked({ limit: 3, includeDependencyBlockers: false }).catch(() => [])
+                : (await this.workItems.blocked({ limit: 5, includeDependencyBlockers: false }).catch(() => [])).slice(0, 5);
+
+        const unassignedWork = unassignedIds.length <= 3
+            ? await sample(unassignedIds, 3)
+            : [];
+        const highPriorityWork = await sample(highPriorityIds, 3);
+        const changedYesterday = await sample(recentIds, 3);
+
+        const overall: HealthRating =
+            deadlineFacts.counts.overdueDueDate > 0 || blockedIds.length >= 2 ? 'At Risk' : 'Good';
+        const health = {
+            overall,
+            dimensions: {
+                deadlines: {
+                    rating: (deadlineFacts.counts.overdueDueDate > 0 ? 'At Risk' : 'Good') as HealthRating,
+                    reasons: [`${OVERDUE_RULE.dueDate.label}: ${deadlineFacts.counts.overdueDueDate}`]
+                },
+                blocked: {
+                    rating: (blockedIds.length > 0 ? 'Moderate Risk' : 'Good') as HealthRating,
+                    reasons: [`Blocked count (tag/state/field): ${blockedIds.length}`]
+                }
+            }
+        };
+
+        const assignmentSuggestions =
+            unassignedIds.length > 0 && unassignedIds.length <= 5
+                ? await this.assignments.recommendAssignments(Math.min(3, unassignedIds.length)).catch(() => null)
+                : null;
 
         const facts: DailyTeamReviewFacts = {
             date: toDateOnly(new Date()),
@@ -88,30 +125,44 @@ export class ReviewService {
                     : null,
             todaysWork: {
                 dueToday: deadlineFacts.upcoming.filter(entry => entry.daysUntilDue === 0),
-                inProgress,
-                changedYesterday: recentlyChanged.map(toItemRef)
+                inProgress: [],
+                changedYesterday
             },
             overdueWork: deadlineFacts.overdue,
-            blockedWork: (blockedAnalysis?.facts.items ?? []).map(entry => ({
-                item: entry.item,
-                signals: entry.signals.map(signal => signal.evidence)
+            blockedWork: blockedSample.map(entry => ({
+                item: toItemRef(entry),
+                signals: entry.blockedSignals.map(signal => signal.evidence)
             })),
-            highPriorityWork: highPriority.map(toItemRef),
+            highPriorityWork,
             upcomingDeadlines: deadlineFacts.upcoming.filter(entry => entry.daysUntilDue > 0),
-            unassignedWork: unassigned.map(toItemRef),
+            unassignedWork,
             teamWorkload: workloadFacts.members.map(member => ({
                 member: member.member.displayName,
                 open: member.counts.assignedOpen,
                 active: member.counts.active,
-                overdue: member.counts.overdue,
+                proposed: member.counts.proposed,
+                overdue: member.counts.overdueDueDate,
                 blocked: member.counts.blocked
             })),
+            overdueRules: deadlineFacts.overdueRules.map(r => ({ label: r.label, count: r.count })),
             health,
             suggestedAssignments: (assignmentSuggestions?.facts.recommendations ?? []).map(entry => ({
                 workItem: entry.workItem,
                 suggested: entry.suggested,
                 reasons: entry.reasons
-            }))
+            })),
+            kpis: {
+                active: workloadFacts.totals.activeItems,
+                proposed: workloadFacts.members.reduce((sum, m) => sum + m.counts.proposed, 0),
+                blocked: blockedIds.length,
+                overdueDueDate: deadlineFacts.counts.overdueDueDate,
+                overduePlannedEnd: deadlineFacts.counts.overduePlannedEnd,
+                unassigned: unassignedIds.length,
+                completion: progress?.completionRate ?? null
+            },
+            overdueDueDateIds: deadlineFacts.overdueDueDateIds,
+            overduePlannedEndIds: deadlineFacts.overduePlannedEndIds,
+            unassignedIds
         };
 
         const observations: string[] = [];
@@ -123,11 +174,9 @@ export class ReviewService {
             observations.push(
                 `${facts.currentSprint.name}: ${facts.currentSprint.completed} done, ${facts.currentSprint.inProgress} in progress, ${facts.currentSprint.notStarted} not started, ${facts.currentSprint.daysRemaining} day(s) remaining.`
             );
-        } else {
-            observations.push('No current sprint is configured, so sprint progress is unavailable.');
         }
         observations.push(
-            `Today: ${facts.todaysWork.dueToday.length} due, ${facts.todaysWork.inProgress.length} in progress, ${facts.todaysWork.changedYesterday.length} changed in the last day.`
+            `${OVERDUE_RULE.dueDate.label}: ${facts.kpis.overdueDueDate}. ${OVERDUE_RULE.plannedEnd.label}: ${facts.kpis.overduePlannedEnd}.`
         );
 
         for (const [dimension, rating] of Object.entries(health.dimensions)) {
@@ -135,23 +184,16 @@ export class ReviewService {
             concerns.push(`${dimension}: ${rating.rating} - ${rating.reasons.join(' ')}`);
         }
 
-        for (const entry of facts.overdueWork.slice(0, 5)) {
+        for (const entry of facts.overdueWork.slice(0, 3)) {
             recommendations.push(
                 `Follow up on overdue ${entry.item.type} #${entry.item.id} "${entry.item.title}"${entry.item.assignedTo ? ` with ${entry.item.assignedTo}` : ' (unassigned)'} - ${entry.relative}.`
             );
         }
-        for (const entry of facts.blockedWork.slice(0, 5)) {
+        for (const entry of facts.blockedWork.slice(0, 3)) {
             recommendations.push(`Unblock ${entry.item.type} #${entry.item.id} "${entry.item.title}" - ${entry.signals[0] ?? 'blocked'}.`);
         }
-        for (const entry of facts.suggestedAssignments.slice(0, 5)) {
-            if (!entry.suggested) continue;
-            recommendations.push(
-                `Consider assigning #${entry.workItem.id} "${entry.workItem.title}" to ${entry.suggested} (${entry.reasons[0] ?? 'available capacity'}).`
-            );
-        }
-        const highRiskToday = facts.upcomingDeadlines.filter(entry => entry.risk === 'High Risk');
-        if (highRiskToday.length > 0) {
-            recommendations.push(`Raise ${highRiskToday.length} High Risk deadline item(s) at stand-up: ${highRiskToday.slice(0, 5).map(entry => `#${entry.item.id}`).join(', ')}.`);
+        if (facts.kpis.unassigned > 0) {
+            recommendations.push(`Triage ${facts.kpis.unassigned} unassigned item(s).`);
         }
 
         return buildEnvelope('daily_team_review', facts, {
@@ -159,9 +201,10 @@ export class ReviewService {
             concerns,
             recommendations,
             methodology: [
-                'Sections are assembled from live Azure DevOps reads: team iterations, work-item queries, revision history and relation links.',
-                '"Changed in the last day" uses System.ChangedDate within the last 1 day.',
-                'Deadline risk, health ratings and assignment suggestions are generated analysis with published thresholds; see analysis_deadline_risk, analysis_project_health and analysis_assignment_recommendation for the rules.',
+                'Standup facts are aggregate-first: WIQL ID/count queries plus bounded samples (≤5 bodies).',
+                `${OVERDUE_RULE.dueDate.label}: ${OVERDUE_RULE.dueDate.description}`,
+                `${OVERDUE_RULE.plannedEnd.label}: ${OVERDUE_RULE.plannedEnd.description}`,
+                'Blocked count uses tag/state/field WIQL, not a full predecessor-link scan.',
                 'Every recommendation is advisory. This server cannot change Azure DevOps.'
             ]
         });

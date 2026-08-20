@@ -10,7 +10,7 @@ import type { ActivityCategory, ConfirmationStatus } from '../database/repositor
 
 const log = createLogger('mcp-tools');
 
-export type ToolGroup = 'azure-devops' | 'analysis' | 'team-lead' | 'email';
+export type ToolGroup = 'azure-devops' | 'analysis' | 'team-lead' | 'system';
 
 export interface ToolDefinition<TShape extends Record<string, ZodTypeAny>> {
     name: string;
@@ -19,8 +19,7 @@ export interface ToolDefinition<TShape extends Record<string, ZodTypeAny>> {
     group: ToolGroup;
     inputSchema?: TShape;
     /**
-     * `readOnly` is true for everything except confirmed email sending, which is
-     * the server's only outbound side effect.
+     * `readOnly` is true for everything except controlled saved-query creation.
      */
     readOnly?: boolean;
     audit: {
@@ -136,14 +135,11 @@ export function registerTool<TShape extends Record<string, ZodTypeAny>>(
                     tool: definition.name,
                     parameters: args,
                     result: appError.toClientMessage(),
-                    outcome: appError.code === 'READ_ONLY_VIOLATION' || appError.code === 'EMAIL_CONFIRMATION_REQUIRED' ? 'rejected' : 'error',
+                    outcome: appError.code === 'READ_ONLY_VIOLATION' ? 'rejected' : 'error',
                     errorCode: appError.code,
                     durationMs,
                     subjectRef: definition.audit.subject?.(args) ?? null,
-                    confirmationStatus:
-                        appError.code === 'EMAIL_CONFIRMATION_REQUIRED'
-                            ? 'awaiting_confirmation'
-                            : definition.audit.confirmationStatus?.(args) ?? 'not_applicable'
+                    confirmationStatus: definition.audit.confirmationStatus?.(args) ?? 'not_applicable'
                 });
 
                 log.warn('Tool failed', { tool: definition.name, code: appError.code, durationMs });
